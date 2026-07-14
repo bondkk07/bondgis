@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "lyssa-web",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "C:\\Users\\gabri\\AppData\\Local\\Temp\\claude\\C--Users-gabri-Documents-HTML\\0bd0703d-5b8e-4b20-8c64-b673b9eafe61\\scratchpad\\serve.ps1"
+      ],
+      "port": 8321
+    }
+  ]
+}

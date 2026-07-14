@@ -1,0 +1,15 @@
+[general]
+name=LyssaPlugin
+qgisMinimumVersion=3.4
+description=Análise ambiental de imóveis rurais - CAR, Área Beneficiável, MapBiomas
+version=1.0.0
+author=Murilo Tavares
+email=murilotavares.ea@gmail.com
+about=Plugin para análise ambiental de imóveis rurais. Importa o arquivo ZIP do CAR, calcula a área beneficiável subtraindo camadas restritivas (APP, RL, etc.), analisa cobertura do solo via MapBiomas Coleção 10.1 (1985-2024) e adiciona camadas externas (WFS/WMS/ArcGIS) de fontes como IBAMA, INCRA, INPE e FUNAI.
+tracker=
+repository=
+tags=ambiental,car,mapbiomas,área beneficiável,ibama,incra,sicar
+category=Plugins
+icon=icon.png
+experimental=False
+deprecated=False

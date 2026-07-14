@@ -1,0 +1,1782 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BondGis - Análise ambiental</title>
+<script>
+(function(){
+  var t = localStorage.getItem('bondgis_theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+})();
+</script>
+
+<!-- Tipografia -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Turf.js (operações geométricas) -->
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.2.0/turf.min.js"></script>
+<!-- shpjs (leitura de shapefile/ZIP no navegador) -->
+<script src="https://unpkg.com/shpjs@6.1.0/dist/shp.js"></script>
+<!-- geotiff.js (leitura dos COGs do MapBiomas) -->
+<script src="https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js"></script>
+
+<style>
+:root{
+  --font:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+
+  --bg:#0B0F19; --bg-elevated:#0D1220;
+  --surface:#111827; --surface-hover:#161F31; --surface-2:#0A0E18;
+  --border:#1E293B; --border-subtle:rgba(255,255,255,.06); --border-strong:rgba(255,255,255,.14);
+  --text:#F8FAFC; --text-secondary:#9CA3AF; --text-tertiary:#6B7280;
+
+  --accent:#2563EB; --accent-hover:#3B82F6; --accent-active:#1D4ED8;
+  --accent-soft:rgba(37,99,235,.16); --accent-border:rgba(37,99,235,.4);
+  --success:#22C55E; --success-soft:rgba(34,197,94,.14); --success-border:rgba(34,197,94,.35);
+  --warning:#F59E0B; --warning-soft:rgba(245,158,11,.14);
+  --danger:#EF4444; --danger-soft:rgba(239,68,68,.14);
+
+  --radius-sm:8px; --radius-md:12px; --radius-lg:16px; --radius-xl:20px; --radius-full:999px;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.3);
+  --shadow-md:0 4px 16px rgba(0,0,0,.35);
+  --shadow-lg:0 16px 44px rgba(0,0,0,.5);
+  --shadow-glow:0 0 0 1px var(--accent-border),0 6px 20px rgba(37,99,235,.28);
+  --ease:cubic-bezier(.4,0,.2,1);
+  --dur:.16s;
+}
+:root[data-theme="light"]{
+  --bg:#F7F8FA; --bg-elevated:#FFFFFF;
+  --surface:#FFFFFF; --surface-hover:#F1F5F9; --surface-2:#F1F5F9;
+  --border:#E4E9EF; --border-subtle:rgba(15,23,42,.06); --border-strong:rgba(15,23,42,.14);
+  --text:#0F172A; --text-secondary:#5B677A; --text-tertiary:#94A3B8;
+  --accent-soft:rgba(37,99,235,.08); --accent-border:rgba(37,99,235,.3);
+  --success-soft:rgba(34,197,94,.1); --warning-soft:rgba(245,158,11,.12); --danger-soft:rgba(239,68,68,.1);
+  --shadow-sm:0 1px 2px rgba(15,23,42,.06);
+  --shadow-md:0 4px 16px rgba(15,23,42,.08);
+  --shadow-lg:0 16px 44px rgba(15,23,42,.14);
+  --shadow-glow:0 0 0 1px var(--accent-border),0 6px 20px rgba(37,99,235,.16);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  display:flex;flex-direction:column;overflow:hidden;
+  font-family:var(--font);color:var(--text);background:var(--bg);
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  transition:background-color .25s var(--ease),color .25s var(--ease);
+}
+::selection{background:var(--accent-soft);color:var(--text)}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:5px}
+::-webkit-scrollbar-thumb:hover{background:var(--text-tertiary)}
+button,input,select{font-family:inherit}
+
+/* ── Cabeçalho ─────────────────────────────────────────── */
+header{
+  height:58px;flex-shrink:0;display:flex;align-items:center;gap:10px;padding:0 18px;
+  background:var(--bg-elevated);border-bottom:1px solid var(--border-subtle);
+  position:relative;z-index:200;
+}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}
+.brand .mark{
+  width:32px;height:32px;border-radius:9px;flex-shrink:0;
+  background:linear-gradient(135deg,#2563EB,#7C3AED);
+  display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:14px;color:#fff;letter-spacing:-.02em;
+  box-shadow:0 2px 8px rgba(37,99,235,.35);
+}
+.brand-text{min-width:0}
+.brand h1{font-size:14.5px;font-weight:700;letter-spacing:-.01em;line-height:1.25;white-space:nowrap}
+.brand .sub{font-size:11px;color:var(--text-tertiary);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header .spacer{flex:1}
+.icon-btn{
+  width:34px;height:34px;flex-shrink:0;border-radius:var(--radius-md);border:1px solid var(--border);
+  background:var(--surface);color:var(--text-secondary);display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:all var(--dur) var(--ease);
+}
+.icon-btn:hover{background:var(--surface-hover);color:var(--text);border-color:var(--border-strong)}
+.icon-btn:active{transform:scale(.92)}
+.icon-sun{display:none}
+[data-theme="light"] .icon-sun{display:block}
+[data-theme="light"] .icon-moon{display:none}
+.btn-cfg{
+  display:flex;align-items:center;gap:7px;height:34px;padding:0 14px;border-radius:var(--radius-md);
+  border:1px solid var(--border);background:var(--surface);color:var(--text-secondary);
+  font-size:12.5px;font-weight:600;cursor:pointer;transition:all var(--dur) var(--ease);flex-shrink:0;
+}
+.btn-cfg:hover{background:var(--surface-hover);color:var(--text);border-color:var(--border-strong)}
+.btn-cfg:active{transform:scale(.97)}
+.mobile-menu-btn{display:none}
+
+/* ── Layout principal ──────────────────────────────────── */
+#app{flex:1;display:flex;min-height:0;position:relative;background:var(--bg)}
+#sidebar{
+  width:400px;min-width:400px;background:var(--bg-elevated);border-right:1px solid var(--border-subtle);
+  display:flex;flex-direction:column;min-height:0;transition:transform .28s var(--ease);
+}
+.map-wrap{flex:1;min-width:0;padding:14px;display:flex}
+#map{flex:1;border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-md);border:1px solid var(--border-subtle)}
+#sidebar-overlay{display:none;position:fixed;inset:58px 0 0 0;background:rgba(2,6,15,.55);z-index:150;backdrop-filter:blur(2px)}
+#sidebar-overlay.on{display:block;animation:fadeSlide .18s var(--ease)}
+
+/* ── Abas (segmented control) ─────────────────────────────── */
+#tabs{display:flex;gap:4px;padding:14px 14px 10px;flex-shrink:0}
+#tabs button{
+  flex:1;border:none;background:transparent;padding:9px 4px;font-size:11.5px;font-weight:600;
+  letter-spacing:-.01em;cursor:pointer;color:var(--text-tertiary);border-radius:var(--radius-sm);
+  transition:all var(--dur) var(--ease);white-space:nowrap;
+}
+#tabs button:hover{color:var(--text-secondary);background:var(--surface-hover)}
+#tabs button.ativo{background:var(--accent-soft);color:var(--accent-hover);box-shadow:inset 0 0 0 1px var(--accent-border)}
+.painel{display:none;flex:1;overflow-y:auto;padding:6px 20px 28px;min-height:0}
+.painel.ativo{display:block;animation:fadeSlide .22s var(--ease)}
+@keyframes fadeSlide{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── Componentes ───────────────────────────────────────── */
+h3{
+  font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-tertiary);
+  margin:24px 0 11px;padding-bottom:9px;border-bottom:1px solid var(--border-subtle);
+}
+h3:first-child{margin-top:4px}
+label{display:block;font-size:12px;font-weight:500;color:var(--text-secondary);margin:13px 0 6px}
+label:first-of-type{margin-top:0}
+input[type=text],select{
+  width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-md);
+  font-size:13px;background:var(--surface);color:var(--text);transition:all var(--dur) var(--ease);
+}
+input[type=text]::placeholder{color:var(--text-tertiary)}
+input[type=text]:hover,select:hover{border-color:var(--border-strong)}
+input[type=text]:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+select[multiple]{padding:4px}
+.btn{
+  display:flex;align-items:center;justify-content:center;gap:6px;width:100%;
+  padding:10px 14px;margin-top:10px;border:none;border-radius:var(--radius-md);
+  background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer;
+  transition:all var(--dur) var(--ease);box-shadow:0 1px 2px rgba(0,0,0,.15);
+}
+.btn:hover:not(:disabled){background:var(--accent-hover);transform:translateY(-1px);box-shadow:var(--shadow-glow)}
+.btn:active:not(:disabled){transform:translateY(0) scale(.98)}
+.btn:disabled{background:var(--border);color:var(--text-tertiary);cursor:not-allowed;box-shadow:none}
+.btn.sec{background:var(--surface);color:var(--text);border:1px solid var(--border);box-shadow:none}
+.btn.sec:hover:not(:disabled){background:var(--surface-hover);border-color:var(--border-strong);color:var(--text);transform:translateY(-1px);box-shadow:var(--shadow-sm)}
+.btn.mini{width:auto;padding:6px 12px;font-size:11.5px;margin:0;border-radius:var(--radius-sm)}
+.hint{font-size:11.5px;color:var(--text-tertiary);margin-top:7px;line-height:1.55}
+.log{
+  background:var(--surface-2);color:#7DD3A8;font-family:"SF Mono",Consolas,monospace;font-size:11px;line-height:1.65;
+  border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:10px 12px;margin-top:12px;
+  max-height:150px;overflow-y:auto;white-space:pre-wrap;display:none;
+}
+.log.on{display:block;animation:fadeSlide .18s var(--ease)}
+.dropzone{
+  border:1.5px dashed var(--border);border-radius:var(--radius-lg);padding:24px 14px;text-align:center;
+  font-size:12.5px;color:var(--text-tertiary);cursor:pointer;margin-top:8px;background:var(--surface);
+  transition:all var(--dur) var(--ease);
+}
+.dropzone:hover{border-color:var(--accent-border);background:var(--accent-soft)}
+.dropzone.hover{border-color:var(--accent);background:var(--accent-soft);color:var(--text)}
+.dropzone strong{color:var(--text-secondary)}
+.camada-item input[type=checkbox]{accent-color:var(--accent);width:14px;height:14px;cursor:pointer;flex-shrink:0}
+.badge{padding:3px 10px;border-radius:var(--radius-full);font-size:11px;font-weight:700;white-space:nowrap;letter-spacing:.01em}
+.badge.red{background:var(--danger-soft);color:var(--danger)}
+.badge.green{background:var(--success-soft);color:var(--success)}
+.badge.amber{background:var(--warning-soft);color:var(--warning)}
+.empty-state{font-size:12px;color:var(--text-tertiary);text-align:center;padding:18px 10px;font-style:normal}
+
+/* ── Gerenciador de camadas ────────────────────────────── */
+#lista-camadas{margin-top:6px;display:flex;flex-direction:column;gap:6px}
+.camada-item{
+  display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);
+  border-radius:var(--radius-md);font-size:12.5px;background:var(--surface);transition:all var(--dur) var(--ease);
+}
+.camada-item:hover{border-color:var(--border-strong);box-shadow:var(--shadow-sm);transform:translateY(-1px)}
+.camada-item .cor{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.camada-item .nome{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+.camada-item button{
+  border:none;background:transparent;cursor:pointer;color:var(--text-tertiary);padding:4px;
+  border-radius:6px;transition:all var(--dur) var(--ease);display:flex;align-items:center;justify-content:center;
+}
+.camada-item button:hover{color:var(--text);background:var(--surface-hover)}
+
+/* ── Catálogo externo ──────────────────────────────────── */
+.cat-grupo{font-size:10.5px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.07em;margin:16px 0 6px}
+.cat-grupo:first-child{margin-top:0}
+.cat-item{
+  display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);
+  border-radius:var(--radius-md);margin-bottom:5px;font-size:12.5px;background:var(--surface);
+  transition:all var(--dur) var(--ease);
+}
+.cat-item:hover{border-color:var(--border-strong)}
+.cat-item .nome{flex:1;color:var(--text)}
+.cat-item .nome span{color:var(--text-tertiary);font-size:10.5px;font-weight:600}
+
+/* ── Tabelas de resultado ──────────────────────────────── */
+table.res{border-collapse:separate;border-spacing:0;width:100%;margin-top:10px;font-size:11.5px;border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden}
+table.res th{background:var(--surface-hover);color:var(--text-secondary);padding:8px 10px;text-align:left;font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em}
+table.res td{border-top:1px solid var(--border-subtle);padding:7px 10px;vertical-align:top;color:var(--text)}
+table.res .dot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.sobrep-item{border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:6px;font-size:12.5px;background:var(--surface);transition:all var(--dur) var(--ease)}
+.sobrep-item:hover{border-color:var(--border-strong)}
+.sobrep-item .cab{display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--text)}
+.sobrep-item .cab .count{color:var(--text-tertiary);font-weight:500}
+.sobrep-item ul{margin:8px 0 0 16px;color:var(--text-secondary);font-size:.92em;line-height:1.6}
+progress{width:100%;height:6px;margin-top:10px;-webkit-appearance:none;appearance:none;border:none;border-radius:var(--radius-full);background:var(--border)}
+progress::-webkit-progress-bar{background:var(--border);border-radius:var(--radius-full)}
+progress::-webkit-progress-value{background:linear-gradient(90deg,var(--accent),#7C3AED);border-radius:var(--radius-full);transition:width .3s var(--ease)}
+progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3AED);border-radius:var(--radius-full)}
+
+/* ── Modal de configurações ────────────────────────────── */
+#modal-cfg{
+  display:none;position:fixed;inset:0;background:rgba(2,6,15,.6);backdrop-filter:blur(6px);
+  -webkit-backdrop-filter:blur(6px);z-index:2000;align-items:center;justify-content:center;
+}
+#modal-cfg.on{display:flex;animation:modalFade .18s var(--ease)}
+#modal-cfg .box{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-xl);
+  padding:24px;width:min(480px,92vw);box-shadow:var(--shadow-lg);animation:modalScale .2s var(--ease);
+}
+#modal-cfg h2{font-size:15px;font-weight:700;color:var(--text);margin-bottom:14px}
+@keyframes modalFade{from{opacity:0}to{opacity:1}}
+@keyframes modalScale{from{opacity:0;transform:scale(.96) translateY(6px)}to{opacity:1;transform:scale(1) translateY(0)}}
+
+/* ── Toasts ────────────────────────────────────────────── */
+#toast-wrap{position:fixed;bottom:20px;right:20px;z-index:3000;display:flex;flex-direction:column;gap:8px;max-width:340px}
+.toast{
+  display:flex;align-items:flex-start;gap:10px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);padding:12px 14px;box-shadow:var(--shadow-lg);font-size:12.5px;color:var(--text);
+  animation:toastIn .22s var(--ease);
+}
+.toast .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.toast.error .dot{background:var(--danger)}
+.toast.warn .dot{background:var(--warning)}
+.toast.info .dot{background:var(--accent)}
+.toast.success .dot{background:var(--success)}
+.toast .msg{flex:1;line-height:1.5}
+.toast .close{cursor:pointer;color:var(--text-tertiary);border:none;background:transparent;font-size:12px;line-height:1;padding:2px}
+.toast .close:hover{color:var(--text)}
+.toast.out{animation:toastOut .18s var(--ease) forwards}
+@keyframes toastIn{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:translateX(0)}}
+@keyframes toastOut{to{opacity:0;transform:translateX(18px)}}
+
+/* ── Responsivo ────────────────────────────────────────── */
+@media (max-width:1100px){
+  #sidebar{width:350px;min-width:350px}
+}
+@media (max-width:900px){
+  .mobile-menu-btn{display:flex}
+  .brand .sub{display:none}
+  #sidebar{position:fixed;top:58px;left:0;bottom:0;z-index:160;width:min(360px,86vw);min-width:0;transform:translateX(-100%)}
+  #sidebar.open{transform:translateX(0)}
+  .map-wrap{padding:8px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <button class="icon-btn mobile-menu-btn" id="btn-mobile-menu" aria-label="Abrir menu" title="Menu">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+  <div class="brand">
+    <div class="mark">B</div>
+    <div class="brand-text">
+      <h1>BondGis</h1>
+      <div class="sub">Análise ambiental de imóveis rurais</div>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <button class="icon-btn" id="btn-theme" aria-label="Alternar tema" title="Alternar tema">
+    <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+    <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+  </button>
+  <button class="btn-cfg" onclick="abrirCfg()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    Configurações
+  </button>
+</header>
+<div id="sidebar-overlay"></div>
+
+<div id="app">
+  <aside id="sidebar">
+    <nav id="tabs">
+      <button data-tab="car"       class="ativo">Importar CAR</button>
+      <button data-tab="mapbiomas">MapBiomas</button>
+      <button data-tab="camadas">Camadas</button>
+      <button data-tab="relatorio">Relatório</button>
+    </nav>
+
+    <!-- ══ ABA: IMPORTAR CAR ══════════════════════════════ -->
+    <section class="painel ativo" id="tab-car">
+      <h3>Buscar no SICAR por código CAR</h3>
+      <label>Código CAR (ex.: MT-5103403-ABCD1234EFGH5678IJKL9012MNOP3456)</label>
+      <input type="text" id="inp-car-1" placeholder="UF-CODMUN-HASH..." autocomplete="off">
+      <button class="btn" id="btn-buscar-car">Buscar Área do Imóvel + Camadas</button>
+      <p class="hint">Consulta os GeoServers públicos do SICAR
+        (geoserver.car.gov.br e consulta.car.gov.br). Se o navegador bloquear por CORS,
+        configure um proxy em Configurações.</p>
+
+      <h3>Análise automática em lote (até 5 imóveis)</h3>
+      <label>Código CAR 2 (opcional)</label>
+      <input type="text" id="inp-car-2" placeholder="UF-CODMUN-HASH..." autocomplete="off">
+      <label>Código CAR 3 (opcional)</label>
+      <input type="text" id="inp-car-3" placeholder="UF-CODMUN-HASH..." autocomplete="off">
+      <label>Código CAR 4 (opcional)</label>
+      <input type="text" id="inp-car-4" placeholder="UF-CODMUN-HASH..." autocomplete="off">
+      <label>Código CAR 5 (opcional)</label>
+      <input type="text" id="inp-car-5" placeholder="UF-CODMUN-HASH..." autocomplete="off">
+      <button class="btn" id="btn-analise-automatica">Analisar Automaticamente e Gerar Relatório</button>
+      <p class="hint">Usa o código acima (1) e os informados aqui (2–5). Para cada imóvel: busca a área e as
+        camadas subsidiárias no SICAR, verifica sobreposição com todas as fontes externas e as Listas
+        MCR/PRODES MMA, analisa a cobertura do solo (MapBiomas, ano mais recente) e consolida tudo em um
+        único relatório, aberto automaticamente ao final.</p>
+      <progress id="prog-auto" value="0" max="100" style="display:none"></progress>
+      <div class="log" id="log-auto"></div>
+
+      <h3>Ou importar ZIP do CAR (shapefiles)</h3>
+      <div class="dropzone" id="dropzone">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="display:block;margin:0 auto 9px;opacity:.55"><path d="M4 14.5A4.5 4.5 0 0 1 8.5 10a5.5 5.5 0 0 1 10.6-1.7A4 4 0 0 1 18 16H7a3 3 0 0 1-3-1.5z"/><path d="M12 12v6M9.5 15.5 12 13l2.5 2.5"/></svg>
+        <div>Arraste o arquivo <strong>.zip</strong> do CAR aqui<br>ou clique para selecionar</div>
+      </div>
+      <input type="file" id="inp-zip" accept=".zip" style="display:none">
+
+      <div class="log" id="log-car"></div>
+
+      <h3>Ou selecionar uma pasta com vários ZIPs do CAR</h3>
+      <div class="dropzone" id="dropzone-pasta">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="display:block;margin:0 auto 9px;opacity:.55"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>
+        <div>Clique para selecionar uma <strong>pasta</strong><br>todos os arquivos .zip do CAR dentro dela serão analisados</div>
+      </div>
+      <input type="file" id="inp-pasta" webkitdirectory directory multiple style="display:none">
+      <p class="hint">Para cada ZIP encontrado (sem limite de quantidade): extrai a área do imóvel e as
+        camadas, verifica sobreposição com todas as fontes externas e as Listas MCR/PRODES MMA, analisa a
+        cobertura MapBiomas do ano mais recente, e consolida tudo em um único relatório automático.</p>
+    </section>
+
+    <!-- ══ ABA: MAPBIOMAS ═════════════════════════════════ -->
+    <section class="painel" id="tab-mapbiomas">
+      <h3>Cobertura do Solo – MapBiomas Coleção 10.1</h3>
+      <label>Camada de análise (geometria)</label>
+      <select id="sel-mb-camada"></select>
+
+      <label>Anos (1985–2024) — Ctrl/Shift para múltiplos</label>
+      <select id="sel-anos" multiple size="7"></select>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <button class="btn mini sec" onclick="selAnos([2024])">2024</button>
+        <button class="btn mini sec" onclick="selAnos([2020,2021,2022,2023,2024])">Últimos 5</button>
+        <button class="btn mini sec" onclick="selAnos([1985,1995,2005,2015,2024])">Série histórica</button>
+      </div>
+
+      <button class="btn" id="btn-mapbiomas">Analisar Cobertura</button>
+      <p class="hint">Lê os GeoTIFFs (COG) do bucket público do MapBiomas via requisições
+        de intervalo — sem baixar o raster completo. Resolução: 30 m (pixel = 0,09 ha).</p>
+
+      <progress id="prog-mb" value="0" max="100" style="display:none"></progress>
+      <div class="log" id="log-mb"></div>
+      <div id="res-mapbiomas"></div>
+    </section>
+
+    <!-- ══ ABA: CAMADAS ═══════════════════════════════════ -->
+    <section class="painel" id="tab-camadas">
+      <h3>Camadas do projeto</h3>
+      <div id="lista-camadas"><div class="empty-state">Nenhuma camada carregada.</div></div>
+
+      <h3>Catálogo de fontes externas</h3>
+      <p class="hint">IBAMA, FUNAI, IPHAN, IBGE, SEMA-MT, ICMBio, INPE/PRODES, EMBRAPA, SFB e EOX.
+        Camadas WFS/ArcGIS são baixadas para a área visível do mapa.</p>
+      <div id="catalogo"></div>
+
+      <h3>Verificação de sobreposição</h3>
+      <label>Camada do imóvel</label>
+      <select id="sel-sobrep-imovel"></select>
+      <button class="btn" id="btn-sobrep">Verificar Sobreposição</button>
+      <progress id="prog-sobrep" value="0" max="100" style="display:none"></progress>
+      <div class="log" id="log-sobrep"></div>
+      <div id="res-sobrep" style="margin-top:10px"></div>
+    </section>
+
+    <!-- ══ ABA: RELATÓRIO ═════════════════════════════════ -->
+    <section class="painel" id="tab-relatorio">
+      <h3>Extratos e relatórios</h3>
+      <label>Camada do imóvel (referência de área)</label>
+      <select id="sel-rel-imovel"></select>
+
+      <button class="btn" id="btn-rel-ambiental">Extrato Ambiental (camadas × área)</button>
+      <p class="hint">Tabela com a área (ha) e o % de cada camada vetorial em relação ao imóvel.</p>
+
+      <button class="btn" id="btn-rel-temporal">Extrato Temporal MapBiomas</button>
+      <button class="btn sec" id="btn-rel-csv">Exportar CSV temporal</button>
+      <p class="hint">Requer uma análise MapBiomas executada na aba correspondente.</p>
+
+      <button class="btn" id="btn-rel-sobrep">Relatório de Sobreposição</button>
+      <p class="hint">Requer a verificação de sobreposição executada na aba Camadas.
+        Inclui a seção MapBiomas se houver análise disponível.</p>
+    </section>
+  </aside>
+
+  <div class="map-wrap"><div id="map"></div></div>
+</div>
+
+<!-- ══ MODAL CONFIGURAÇÕES ══════════════════════════════ -->
+<div id="modal-cfg">
+  <div class="box">
+    <h2>Configurações</h2>
+    <label>Prefixo de proxy CORS (opcional)</label>
+    <input type="text" id="inp-proxy" placeholder="https://seu-proxy.exemplo.com/?url=">
+    <p class="hint">Os GeoServers públicos (SICAR, FUNAI, INPE…) nem sempre enviam cabeçalhos
+      CORS. Em produção, use um backend/proxy próprio. A URL de destino é anexada
+      (codificada) ao final do prefixo.</p>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn" onclick="salvarCfg()">Salvar</button>
+      <button class="btn sec" onclick="document.getElementById('modal-cfg').classList.remove('on')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-wrap" aria-live="polite"></div>
+
+<script>
+'use strict';
+/* ════════════════════════════════════════════════════════════════════
+   BONDGIS — porte do plugin QGIS LyssaPlugin (Murilo Tavares) para a web.
+   Módulos portados: importar_car, sicar_api,
+   mapbiomas (+classes), camadas_externas, verificar_sobreposicao, relatorio.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── Dados portados do plugin ─────────────────────────────────────── */
+
+const CAR_CAMADAS = {
+  'APP':'APP','AREA_IMOVEL':'Área do Imóvel','RESERVA_LEGAL':'Reserva Legal',
+  'VEGETACAO_NATIVA':'Vegetação Nativa','HIDROGRAFIA':'Hidrografia',
+  'NASCENTES_VEREDAS':'Nascentes e Veredas','BANHADO':'Banhado',
+  'USO_RESTRITO':'Uso Restrito','SERVIDAO_ADMINISTRATIVA':'Servidão Administrativa',
+  'AREA_CONSOLIDADA':'Área Consolidada','DESMATAMENTO_EMBARGO':'Desmatamento / Embargo',
+  'TOPO_MORRO':'Topo de Morro',
+};
+
+// Campos candidatos a conter o código CAR nos atributos de um shapefile importado
+const CAMPOS_CAR_ATRIBUTO = ['cod_imovel','COD_IMOVEL','codImovel','inscricao','INSCRICAO',
+  'inscricaocar','codigo','CODIGO','car','CAR'];
+
+const SICAR_AREA_WFS_URL     = 'https://geoserver.car.gov.br/geoserver/sicar/ows';
+const SICAR_CONSULTA_WFS_URL = 'https://consulta.car.gov.br/geoserver/ows';
+
+const CAMADAS_CONSULTA = [
+  {typeName:'consulta_publica:ast',                                rotulo:'Área do Imóvel (AST)',                  grupo:'AREA_IMOVEL'},
+  {typeName:'consulta_publica:vegetacao_nativa',                   rotulo:'Vegetação Nativa',                      grupo:'VEGETACAO_NATIVA'},
+  {typeName:'consulta_publica:arl_proposta',                       rotulo:'Reserva Legal Proposta',                grupo:'RESERVA_LEGAL'},
+  {typeName:'consulta_publica:arl_averbada',                       rotulo:'Reserva Legal Averbada',                grupo:'RESERVA_LEGAL'},
+  {typeName:'consulta_publica:arl_aprovada_nao_averbada',          rotulo:'Reserva Legal Aprovada (não averbada)', grupo:'RESERVA_LEGAL'},
+  {typeName:'consulta_publica:app_rio_ate_10',                     rotulo:'APP – Rio até 10 m',                    grupo:'APP'},
+  {typeName:'consulta_publica:app_rio_10_a_50',                    rotulo:'APP – Rio 10 a 50 m',                   grupo:'APP'},
+  {typeName:'consulta_publica:app_rio_50_a_200',                   rotulo:'APP – Rio 50 a 200 m',                  grupo:'APP'},
+  {typeName:'consulta_publica:app_rio_200_a_600',                  rotulo:'APP – Rio 200 a 600 m',                 grupo:'APP'},
+  {typeName:'consulta_publica:app_rio_acima_600',                  rotulo:'APP – Rio acima de 600 m',              grupo:'APP'},
+  {typeName:'consulta_publica:app_nascente_olho_dagua',            rotulo:"APP – Nascente / olho d'água",          grupo:'APP'},
+  {typeName:'consulta_publica:app_lago_natural',                   rotulo:'APP – Lago natural',                    grupo:'APP'},
+  {typeName:'consulta_publica:app_borda_chapada',                  rotulo:'APP – Borda de chapada',                grupo:'APP'},
+  {typeName:'consulta_publica:app_area_declividade_maior_45',      rotulo:'APP – Declividade > 45°',               grupo:'APP'},
+  {typeName:'consulta_publica:app_area_topo_morro',                rotulo:'APP – Topo de morro',                   grupo:'APP'},
+  {typeName:'consulta_publica:area_uso_restrito_declividade_25_a_45', rotulo:'Uso Restrito – Declividade 25–45°',  grupo:'USO_RESTRITO'},
+  {typeName:'consulta_publica:area_uso_restrito_pantaneira',       rotulo:'Uso Restrito – Pantaneira',             grupo:'USO_RESTRITO'},
+  {typeName:'consulta_publica:area_consolidada',                   rotulo:'Área Consolidada',                      grupo:'OUTRO'},
+  {typeName:'consulta_publica:area_embargada',                     rotulo:'Área Embargada',                        grupo:'OUTRO'},
+  {typeName:'consulta_publica:area_servidao_administrativa_total', rotulo:'Servidão Administrativa',               grupo:'OUTRO'},
+];
+
+const CAMADAS_EXTERNAS = [
+  {titulo:'Embargos IBAMA', grupo:'Fontes Externas', tipo:'arcgis',
+   url:'https://pamgia.ibama.gov.br/server/rest/services/01_Publicacoes_Bases/adm_embargos_ibama_a/MapServer/0/query'},
+  {titulo:'Terras Indígenas (FUNAI)', grupo:'Fontes Externas', tipo:'wfs',
+   url:'https://geoserver.funai.gov.br/geoserver/Funai/wfs', type_name:'Funai:tis_poligonais', version:'2.0.0'},
+  {titulo:'Sítios Arqueológicos (IPHAN)', grupo:'Fontes Externas', tipo:'wfs',
+   url:'https://geoserver.iphan.gov.br/geoserver/SICG/ows', type_name:'SICG:sitios', version:'1.0.0'},
+  {titulo:'Malha Municipal IBGE 2020', grupo:'Fontes Externas', tipo:'wfs',
+   url:'https://geoservicos.ibge.gov.br/geoserver/ows', type_name:'CGEO:andb2022_020302', version:'2.0.0',
+   ignorar_sobreposicao:true},
+  {titulo:'APF Geometria Regular (SEMA-MT)', grupo:'SEMA-MT', tipo:'wfs',
+   url:'https://geo.sema.mt.gov.br/geoserver/wfs', type_name:'Geoportal:MVW_APF_GEOMETRIA_REGULAR', version:'2.0.0',
+   params:{authkey:'541085de-9a2e-454e-bdba-eb3d57a2f492'}, ignorar_sobreposicao:true},
+  {titulo:'Áreas Embargadas SEMA-MT', grupo:'SEMA-MT', tipo:'wfs',
+   url:'https://geo.sema.mt.gov.br/geoserver/wfs', type_name:'Geoportal:AREAS_EMBARGADAS_SEMA', version:'2.0.0',
+   params:{authkey:'541085de-9a2e-454e-bdba-eb3d57a2f492'}},
+  {titulo:'Áreas Embargadas ICMBio', grupo:'ICMBio', tipo:'wfs',
+   url:'https://geoservicos.inde.gov.br/geoserver/ICMBio/wfs', type_name:'ICMBio:embargos_icmbio', version:'2.0.0'},
+  {titulo:'Autos de Infração ICMBio', grupo:'ICMBio', tipo:'wfs',
+   url:'https://geoservicos.inde.gov.br/geoserver/ICMBio/wfs', type_name:'ICMBio:autos_infracao_icmbio', version:'2.0.0'},
+  {titulo:'Florestas Públicas Tipo B (CNFP 2024)', grupo:'Fontes Externas', tipo:'arcgis',
+   url:'https://smapas.florestal.gov.br/server/rest/services/Hosted/Cadastro_Nacional_de_Florestas_P%C3%BAblicas_Atualiza%C3%A7%C3%A3o_2024_Retificado/FeatureServer/0/query',
+   params:{where:"tipo = 'TIPO B'"}},
+  {titulo:'PRODES Amazônia – Desmatamento anual', grupo:'Alertas / PRODES', tipo:'wfs',
+   url:'https://terrabrasilis.dpi.inpe.br/geoserver/prodes-legal-amz/yearly_deforestation/ows',
+   type_name:'prodes-legal-amz:yearly_deforestation', version:'2.0.0',
+   sobrep_filter:{campos:['year','YEAR','view_date','ano','ANO','year_deforestation'], op:'gte', valor:2019}},
+  {titulo:'PRODES Cerrado – Desmatamento anual', grupo:'Alertas / PRODES', tipo:'wfs',
+   url:'https://terrabrasilis.dpi.inpe.br/geoserver/prodes-cerrado-nb/yearly_deforestation/ows',
+   type_name:'prodes-cerrado-nb:yearly_deforestation', version:'2.0.0',
+   sobrep_filter:{campos:['year','YEAR','view_date','ano','ANO','year_deforestation'], op:'gte', valor:2019}},
+  {titulo:'PRODES Mata Atlântica – Desmatamento anual', grupo:'Alertas / PRODES', tipo:'wfs',
+   url:'https://terrabrasilis.dpi.inpe.br/geoserver/prodes-mata-atlantica-nb/yearly_deforestation/ows',
+   type_name:'prodes-mata-atlantica-nb:yearly_deforestation', version:'2.0.0',
+   sobrep_filter:{campos:['year','YEAR','view_date','ano','ANO','year_deforestation'], op:'gte', valor:2019}},
+  {titulo:'PRODES Caatinga – Desmatamento anual', grupo:'Alertas / PRODES', tipo:'wfs',
+   url:'https://terrabrasilis.dpi.inpe.br/geoserver/prodes-caatinga-nb/yearly_deforestation/ows',
+   type_name:'prodes-caatinga-nb:yearly_deforestation', version:'2.0.0',
+   sobrep_filter:{campos:['year','YEAR','view_date','ano','ANO','year_deforestation'], op:'gte', valor:2019}},
+  {titulo:'PRODES Pampa – Desmatamento anual', grupo:'Alertas / PRODES', tipo:'wfs',
+   url:'https://terrabrasilis.dpi.inpe.br/geoserver/prodes-pampa-nb/yearly_deforestation/ows',
+   type_name:'prodes-pampa-nb:yearly_deforestation', version:'2.0.0',
+   sobrep_filter:{campos:['year','YEAR','view_date','ano','ANO','year_deforestation'], op:'gte', valor:2019}},
+  {titulo:'Assentamentos Rurais – EMBRAPA 2023', grupo:'Áreas Atribuídas', tipo:'wfs',
+   url:'https://geoinfo.dados.embrapa.br/geoserver/wfs', type_name:'geonode:areasatribuidas2023', version:'2.0.0',
+   attr_filter:{campo:'categoria', valor:'assentamento'}},
+  {titulo:'Quilombolas – EMBRAPA 2023', grupo:'Áreas Atribuídas', tipo:'wfs',
+   url:'https://geoinfo.dados.embrapa.br/geoserver/wfs', type_name:'geonode:areasatribuidas2023', version:'2.0.0',
+   attr_filter:{campo:'categoria', valor:'quilombola'}},
+  {titulo:'Unidades de Conservação – EMBRAPA 2023', grupo:'Áreas Atribuídas', tipo:'wfs',
+   url:'https://geoinfo.dados.embrapa.br/geoserver/wfs', type_name:'geonode:areasatribuidas2023', version:'2.0.0',
+   attr_filter:{campo:'categoria', valor:'unidade de conservacao'}},
+  {titulo:'Sentinel-2 Cloudless 2024 (EOX)', grupo:'Mosaicos', tipo:'wms',
+   url:'https://tiles.maps.eox.at/wms', layers:'s2cloudless-2024_3857', format:'image/jpeg'},
+  {titulo:'Sentinel-2 Cloudless 2022 (EOX)', grupo:'Mosaicos', tipo:'wms',
+   url:'https://tiles.maps.eox.at/wms', layers:'s2cloudless-2022_3857', format:'image/jpeg'},
+  {titulo:'Mosaico PRODES Amazônia 2024', grupo:'Mosaicos', tipo:'wms',
+   url:'https://terrabrasilis.dpi.inpe.br/geoserver/prodes-legal-amz/wms',
+   layers:'temporal_mosaic_legal_amazon', params:{time:'2024-01-01T00:00:00.000Z', version:'1.3.0'}},
+  {titulo:'ZSEE Rondônia 2005 (SEDAM)', grupo:'Fontes Externas / SEDAM-RO', tipo:'wfs',
+   url:'https://geoportal.sedam.ro.gov.br/geoserver/ows',
+   type_name:'cogeo:ZSEE_2Aprox_2005_312_SIRGAS2000_4674', version:'2.0.0'},
+];
+
+const LISTAS_PRODES_MMA = [
+  {bioma:'Amazônia',       url:'https://labdez.mma.gov.br/server/rest/services/Hosted/lista_mcr_amazonia_VF/FeatureServer/0/query'},
+  {bioma:'Mata Atlântica', url:'https://labdez.mma.gov.br/server/rest/services/Hosted/lista_mcr_mata_atlantica_VF/FeatureServer/0/query'},
+  {bioma:'Cerrado',        url:'https://labdez.mma.gov.br/server/rest/services/Hosted/lista_mcr_cerrado_VF/FeatureServer/0/query'},
+  {bioma:'Caatinga',       url:'https://labdez.mma.gov.br/server/rest/services/Hosted/lista_mcr_caatinga_VF/FeatureServer/0/query'},
+  {bioma:'Pantanal',       url:'https://labdez.mma.gov.br/server/rest/services/Hosted/lista_mcr_pantanal_VF/FeatureServer/0/query'},
+  {bioma:'Pampa',          url:'https://labdez.mma.gov.br/server/rest/services/Hosted/lista_mcr_pampa_VF/FeatureServer/0/query'},
+];
+
+const CAMPOS_PRODES_MMA = [
+  'cod_imovel','uf','municipio','area_total_ha','soma_desmat',
+  'dentro_criterio','criterio_aplicado','resultados',
+  'sobrep_prodes_2019','sobrep_prodes_2020','sobrep_prodes_2021',
+  'sobrep_prodes_2022','sobrep_prodes_2023','sobrep_prodes_2024','sobrep_prodes_2025',
+];
+
+// MapBiomas Brasil Coleção 10.1 — legenda oficial LULC (1985–2024)
+const CLASSES_LULC = {
+  3:{nome:'Formação Florestal',cor:'#1f8d49'},4:{nome:'Formação Savânica',cor:'#7dc975'},
+  5:{nome:'Mangue',cor:'#04381d'},6:{nome:'Floresta Alagável',cor:'#026975'},
+  49:{nome:'Restinga Arborizada',cor:'#02d659'},11:{nome:'Área Úmida Natural',cor:'#519799'},
+  12:{nome:'Formação Campestre',cor:'#d6bc74'},29:{nome:'Afloramento Rochoso',cor:'#8a646b'},
+  32:{nome:'Apicum',cor:'#ad5100'},50:{nome:'Restinga Herbácea',cor:'#ff8c02'},
+  13:{nome:'Outras Formações não Florestais',cor:'#d89f5c'},15:{nome:'Pastagem',cor:'#edde8e'},
+  39:{nome:'Soja',cor:'#c27ba0'},20:{nome:'Cana-de-Açúcar',cor:'#f54ca9'},
+  40:{nome:'Arroz Irrigado',cor:'#d082de'},62:{nome:'Algodão',cor:'#ed0082'},
+  41:{nome:'Outras Lavouras Temporárias',cor:'#f09dce'},46:{nome:'Café',cor:'#c59ff4'},
+  47:{nome:'Citrus',cor:'#b6b5df'},35:{nome:'Dendê (Palma de Óleo)',cor:'#ff73ed'},
+  48:{nome:'Outras Lavouras Perenes',cor:'#e77fa0'},9:{nome:'Silvicultura',cor:'#7a5900'},
+  21:{nome:'Mosaico de Usos',cor:'#ffefc3'},23:{nome:'Praia, Duna e Areal',cor:'#dd7e6b'},
+  24:{nome:'Área Urbanizada',cor:'#d4271e'},30:{nome:'Mineração',cor:'#9c0027'},
+  25:{nome:'Outras Áreas não Vegetadas',cor:'#eb4e1b'},33:{nome:'Rio, Lago e Oceano',cor:'#2532e4'},
+  31:{nome:'Aquicultura',cor:'#091077'},27:{nome:'Não Observado',cor:'#d3d3d3'},
+};
+
+const COG_URL_LULC = ano =>
+  `https://storage.googleapis.com/mapbiomas-public/initiatives/brasil/collection_10/lulc/coverage/brazil_coverage_${ano}.tif`;
+const ANO_MINIMO = 1985, ANO_MAXIMO = 2024;
+const PIXEL_AREA_HA_30M = 0.09;
+
+const CORES_GRUPO = {
+  'AREA_IMOVEL':'#f1c40f','APP':'#c0392b','RESERVA_LEGAL':'#1a7f4b',
+  'VEGETACAO_NATIVA':'#27ae60','HIDROGRAFIA':'#2980b9','USO_RESTRITO':'#d68910',
+  'OUTRO':'#7f8c8d','EXTERNA':'#8e44ad',
+};
+
+/* ── Estado global ────────────────────────────────────────────────── */
+const state = {
+  registro: [],            // [{id, nome, grupo, tipo:'vector'|'wms', geojson, leafletLayer, visivel}]
+  seq: 0,
+  codigoCar: '',
+  resultadoMapBiomas: null,
+  resultadoSobrep: null,
+};
+let cfg = { proxy: localStorage.getItem('lyssa_proxy') || '' };
+
+/* ── Mapa ─────────────────────────────────────────────────────────── */
+const map = L.map('map', {zoomControl:true}).setView([-12.5, -55.0], 5);
+const baseOSM = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {maxZoom:19, attribution:'© OpenStreetMap'}).addTo(map);
+const baseSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  {maxZoom:19, attribution:'Esri World Imagery'});
+L.control.layers({'OpenStreetMap':baseOSM,'Satélite (Esri)':baseSat}, {}, {position:'topright'}).addTo(map);
+L.control.scale({imperial:false}).addTo(map);
+
+/* ── Utilidades ───────────────────────────────────────────────────── */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function toast(msg, type='info', ms=5000){
+  const wrap = $('toast-wrap');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span class="dot"></span><span class="msg"></span><button class="close" aria-label="Fechar">✕</button>`;
+  el.querySelector('.msg').textContent = msg;
+  const remove = () => { el.classList.add('out'); setTimeout(() => el.remove(), 180); };
+  el.querySelector('.close').addEventListener('click', remove);
+  wrap.appendChild(el);
+  if(ms) setTimeout(remove, ms);
+}
+
+function withProxy(url){
+  return cfg.proxy ? cfg.proxy + encodeURIComponent(url) : url;
+}
+async function fetchJson(url, timeoutMs=60000){
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), timeoutMs);
+  try{
+    const resp = await fetch(withProxy(url), {signal:ctl.signal});
+    if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const raw = await resp.text();
+    if(raw.trimStart().startsWith('<'))
+      throw new Error('Servidor retornou XML; verifique a URL/typeName.');
+    return JSON.parse(raw);
+  } finally { clearTimeout(t); }
+}
+function logTo(id, msg, limpar=false){
+  const el = $(id);
+  el.classList.add('on');
+  if(limpar) el.textContent = '';
+  el.textContent += msg + '\n';
+  el.scrollTop = el.scrollHeight;
+}
+function agora(){
+  const d = new Date();
+  const p = n => String(n).padStart(2,'0');
+  return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/* ── Gerenciador de camadas ───────────────────────────────────────── */
+function adicionarCamadaVetorial(nome, geojson, grupo='OUTRO', zoom=true){
+  const cor = CORES_GRUPO[grupo] || CORES_GRUPO.OUTRO;
+  const leafletLayer = L.geoJSON(geojson, {
+    style: {color:cor, weight:2, fillColor:cor, fillOpacity: grupo==='AREA_IMOVEL' ? 0.05 : 0.28},
+    pointToLayer: (f, ll) => L.circleMarker(ll, {radius:5, color:cor, fillColor:cor, fillOpacity:.8}),
+    onEachFeature: (f, l) => {
+      const props = f.properties || {};
+      const linhas = Object.entries(props).slice(0, 12)
+        .map(([k,v]) => `<b>${esc(k)}</b>: ${esc(v)}`).join('<br>');
+      if(linhas) l.bindPopup(`<div style="max-height:220px;overflow:auto;font-size:.85em">${linhas}</div>`);
+    },
+  }).addTo(map);
+  const item = {id:++state.seq, nome, grupo, tipo:'vector', geojson, leafletLayer, visivel:true, cor};
+  state.registro.push(item);
+  if(zoom){
+    const b = leafletLayer.getBounds();
+    if(b.isValid()) map.fitBounds(b.pad(0.15));
+  }
+  atualizarUICamadas();
+  return item;
+}
+function adicionarCamadaWMS(info){
+  const params = {layers:info.layers, format:info.format||'image/png', transparent:info.format!=='image/jpeg'};
+  Object.assign(params, info.params || {});
+  const leafletLayer = L.tileLayer.wms(info.url, params).addTo(map);
+  const item = {id:++state.seq, nome:info.titulo, grupo:'EXTERNA', tipo:'wms', leafletLayer, visivel:true, cor:'#8e44ad'};
+  state.registro.push(item);
+  atualizarUICamadas();
+  return item;
+}
+function removerCamada(id){
+  const i = state.registro.findIndex(c => c.id === id);
+  if(i < 0) return;
+  map.removeLayer(state.registro[i].leafletLayer);
+  state.registro.splice(i, 1);
+  atualizarUICamadas();
+}
+function alternarCamada(id){
+  const c = state.registro.find(x => x.id === id);
+  if(!c) return;
+  c.visivel = !c.visivel;
+  c.visivel ? map.addLayer(c.leafletLayer) : map.removeLayer(c.leafletLayer);
+  atualizarUICamadas();
+}
+function zoomCamada(id){
+  const c = state.registro.find(x => x.id === id);
+  if(c?.tipo === 'vector'){
+    const b = c.leafletLayer.getBounds();
+    if(b.isValid()) map.fitBounds(b.pad(0.15));
+  }
+}
+const camadasVetoriais = () => state.registro.filter(c => c.tipo === 'vector');
+
+function atualizarUICamadas(){
+  // Lista na aba Camadas
+  const el = $('lista-camadas');
+  if(!state.registro.length){
+    el.innerHTML = '<div class="empty-state">Nenhuma camada carregada.</div>';
+  } else {
+    el.innerHTML = state.registro.map(c => `
+      <div class="camada-item">
+        <input type="checkbox" ${c.visivel?'checked':''} onchange="alternarCamada(${c.id})">
+        <span class="cor" style="background:${c.cor}"></span>
+        <span class="nome" title="${esc(c.nome)}">${esc(c.nome)}</span>
+        ${c.tipo==='vector' ? `<button title="Zoom" onclick="zoomCamada(${c.id})"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></button>` : ''}
+        <button title="Remover" onclick="removerCamada(${c.id})"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>`).join('');
+  }
+  // Selects de camada do imóvel / análise
+  const vets = camadasVetoriais();
+  const opts = pref => {
+    const sorted = [...vets].sort((a,b) =>
+      (b.nome.toUpperCase().includes(pref) ? 1 : 0) - (a.nome.toUpperCase().includes(pref) ? 1 : 0));
+    return sorted.map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('')
+      || '<option value="">— nenhuma camada vetorial —</option>';
+  };
+  for(const id of ['sel-sobrep-imovel','sel-rel-imovel','sel-mb-camada'])
+    $(id).innerHTML = opts('IMÓVEL');
+}
+
+/* ── Geometria (utilitários compartilhados por MapBiomas e Sobreposição) ── */
+function featuresPoligonais(geojson){
+  const fc = geojson.type === 'FeatureCollection' ? geojson : turf.featureCollection([geojson]);
+  return fc.features.filter(f =>
+    f.geometry && ['Polygon','MultiPolygon'].includes(f.geometry.type));
+}
+function fixGeometria(feature){
+  // Equivalente ao native:fixgeometries: desfaz auto-interseções e reune as partes.
+  try{
+    const kinks = turf.kinks(feature);
+    if(!kinks.features.length) return turf.cleanCoords(feature);
+    const partes = turf.unkinkPolygon(feature).features;
+    return unirFeatures(partes) || feature;
+  } catch { return feature; }
+}
+function unirFeatures(features){
+  const polys = features.filter(f => f.geometry &&
+    ['Polygon','MultiPolygon'].includes(f.geometry.type)).map(fixSeguro);
+  if(!polys.length) return null;
+  let acc = polys[0];
+  for(let i = 1; i < polys.length; i++){
+    try{ acc = turf.union(turf.featureCollection([acc, polys[i]])) || acc; }
+    catch{ /* mantém acumulado — fallback igual ao plugin */ }
+  }
+  return acc;
+}
+function fixSeguro(f){ try{ return fixGeometria(f); } catch{ return f; } }
+
+function calcularAreaHa(geojson){
+  // Área geodésica (WGS-84), como QgsDistanceArea com elipsoide WGS84
+  try{
+    const fc = geojson.type === 'FeatureCollection' ? geojson : turf.featureCollection([geojson]);
+    let m2 = 0;
+    for(const f of fc.features) if(f.geometry) m2 += turf.area(f);
+    return Math.round(m2 / 10000 * 10000) / 10000;
+  } catch { return 0; }
+}
+
+/* ── SICAR (equivalente a sicar_api.py) ───────────────────────────── */
+function extrairUF(codigoCar){
+  const m = /^([A-Z]{2})-\d{7}-/.exec(codigoCar);
+  return m ? m[1].toLowerCase() : null;
+}
+function wfsCarUrl(base, typeName, version, codigoCar){
+  const carSafe = codigoCar.replaceAll("'", "''");
+  const typeParam = version.startsWith('2.') ? 'typenames' : 'typeName';
+  const p = new URLSearchParams({
+    service:'WFS', version, request:'GetFeature',
+    [typeParam]: typeName,
+    outputFormat:'application/json', srsName:'EPSG:4326',
+    CQL_FILTER:`cod_imovel='${carSafe}'`,
+  });
+  return `${base}?${p}`;
+}
+async function buscarSicar(){
+  const codigo = $('inp-car-1').value.trim().toUpperCase();
+  const uf = extrairUF(codigo);
+  if(!uf){ logTo('log-car', `✖ Código CAR inválido: "${codigo}"`, true); return; }
+
+  const btn = $('btn-buscar-car');
+  btn.disabled = true;
+  logTo('log-car', `Buscando área do imóvel (${uf.toUpperCase()})...`, true);
+  try{
+    const geojson = await fetchJson(
+      wfsCarUrl(SICAR_AREA_WFS_URL, `sicar:sicar_imoveis_${uf}`, '1.0.0', codigo));
+    if(!geojson.features?.length)
+      throw new Error('Imóvel não encontrado no GeoServer SICAR. Verifique o código.');
+    state.codigoCar = codigo;
+    adicionarCamadaVetorial('CAR_Área do Imóvel', geojson, 'AREA_IMOVEL');
+    logTo('log-car', `✔ Área do Imóvel carregada (${geojson.features.length} feição/ões).`);
+
+    let ok = 0;
+    for(let i = 0; i < CAMADAS_CONSULTA.length; i++){
+      const cam = CAMADAS_CONSULTA[i];
+      logTo('log-car', `[${i+1}/${CAMADAS_CONSULTA.length}] ${cam.rotulo}...`);
+      try{
+        const gj = await fetchJson(
+          wfsCarUrl(SICAR_CONSULTA_WFS_URL, cam.typeName, '2.0.0', codigo));
+        if(gj.features?.length){
+          adicionarCamadaVetorial(`CAR_${cam.rotulo}`, gj, cam.grupo, false);
+          ok++;
+        }
+      } catch(e){ logTo('log-car', `   ⚠ ${cam.rotulo}: ${e.message}`); }
+    }
+    logTo('log-car', `✔ Concluído: ${ok} camada(s) subsidiária(s) com feições.`);
+  } catch(e){
+    logTo('log-car', `✖ ${e.message}`);
+    logTo('log-car', 'Dica: falhas de rede geralmente são CORS — configure um proxy em Configurações.');
+  } finally { btn.disabled = false; }
+}
+
+/* ── Importar ZIP do CAR (equivalente a importar_car.py) ──────────── */
+function nomeCamadaShp(fileName){
+  const base = (fileName || '').split(/[\\/]/).pop().replace(/\.\w+$/, '');
+  const up = base.toUpperCase();
+  for(const [chave, nome] of Object.entries(CAR_CAMADAS))
+    if(up.includes(chave)) return nome;
+  return base || 'Camada';
+}
+function grupoPorNome(nome){
+  const up = nome.toUpperCase();
+  if(up.includes('IMÓVEL') || up.includes('IMOVEL')) return 'AREA_IMOVEL';
+  if(up.includes('APP')) return 'APP';
+  if(up.includes('RESERVA')) return 'RESERVA_LEGAL';
+  if(up.includes('VEGETA')) return 'VEGETACAO_NATIVA';
+  if(up.includes('HIDRO') || up.includes('NASCENTE')) return 'HIDROGRAFIA';
+  if(up.includes('RESTRITO')) return 'USO_RESTRITO';
+  return 'OUTRO';
+}
+async function importarZip(file){
+  logTo('log-car', `Lendo ${file.name}...`, true);
+  try{
+    const buf = await file.arrayBuffer();
+    const saida = await shp(buf);                 // GeoJSON ou lista de GeoJSON
+    const lista = Array.isArray(saida) ? saida : [saida];
+    let n = 0;
+    for(const gj of lista){
+      if(!gj?.features?.length) continue;
+      const nome = nomeCamadaShp(gj.fileName || `camada_${n+1}`);
+      const item = adicionarCamadaVetorial(nome, gj, grupoPorNome(nome), n === 0);
+      if(!state.codigoCar && item.grupo === 'AREA_IMOVEL'){
+        // tenta extrair o código CAR dos atributos (obter_codigo_car do plugin)
+        const props = gj.features[0].properties || {};
+        for(const c of CAMPOS_CAR_ATRIBUTO)
+          if(props[c]){ state.codigoCar = String(props[c]).trim().toUpperCase(); break; }
+      }
+      logTo('log-car', `✔ ${nome} (${gj.features.length} feições)`);
+      n++;
+    }
+    logTo('log-car', n ? `✔ ${n} camada(s) importada(s).` : '⚠ Nenhum shapefile com feições encontrado no ZIP.');
+    if(state.codigoCar){
+      logTo('log-car', `Código CAR detectado: ${state.codigoCar}`);
+      $('inp-car-1').value = state.codigoCar;
+    }
+  } catch(e){ logTo('log-car', `✖ Falha ao ler o ZIP: ${e.message}`); }
+}
+
+/* ── Análise em lote a partir de uma pasta com vários ZIPs do CAR ─────
+   Para cada ZIP: extrai shapefiles localmente (sem consultar o SICAR),
+   roda a mesma verificação de sobreposição + MapBiomas do fluxo por
+   código, e reaproveita gerarRelatorioAutomatico() para o relatório. */
+async function analisarPastaZips(zips){
+  const btn = $('btn-analise-automatica'), prog = $('prog-auto');
+  btn.disabled = true;
+  prog.style.display = 'block'; prog.value = 0;
+  logTo('log-auto', `Encontrados ${zips.length} arquivo(s) .zip na pasta. Iniciando análise...`, true);
+
+  const resultadosPorImovel = [];
+  for(let i = 0; i < zips.length; i++){
+    const file = zips[i];
+    const prefixo = file.name.replace(/\.zip$/i, '');
+    try{
+      logTo('log-auto', `[${i+1}/${zips.length}] ${file.name}: extraindo shapefiles...`);
+      const buf = await file.arrayBuffer();
+      const saida = await shp(buf);
+      const camadas = (Array.isArray(saida) ? saida : [saida]).filter(gj => gj?.features?.length);
+      if(!camadas.length) throw new Error('Nenhum shapefile com feições encontrado no ZIP.');
+
+      let imovelGj = null, codigoCar = '';
+      camadas.forEach((gj, idx) => {
+        const nome = nomeCamadaShp(gj.fileName || `camada_${idx+1}`);
+        const grupo = grupoPorNome(nome);
+        adicionarCamadaVetorial(`${prefixo}_${nome}`, gj, grupo, false);
+        if(grupo === 'AREA_IMOVEL' && !imovelGj){
+          imovelGj = gj;
+          const props = gj.features[0].properties || {};
+          for(const c of CAMPOS_CAR_ATRIBUTO)
+            if(props[c]){ codigoCar = String(props[c]).trim().toUpperCase(); break; }
+        }
+      });
+      if(!imovelGj) throw new Error('Área do Imóvel não encontrada no ZIP.');
+
+      const geomImovel = unirFeatures(featuresPoligonais(imovelGj));
+      if(!geomImovel) throw new Error('Geometria do imóvel inválida.');
+      const areaHa = calcularAreaHa(imovelGj);
+      const [minX, minY, maxX, maxY] = turf.bbox(geomImovel);
+      const buf2 = 0.012;
+      const bbox = [minX-buf2, minY-buf2, maxX+buf2, maxY+buf2];
+
+      logTo('log-auto', `[${i+1}/${zips.length}] ${file.name}: verificando sobreposição...`);
+      const externas = CAMADAS_EXTERNAS.filter(c => c.tipo !== 'wms' && !c.ignorar_sobreposicao);
+      const sobreposicao = [];
+      for(const info of externas) sobreposicao.push(await verificarExterna(info, geomImovel, bbox));
+      sobreposicao.push(await consultarProdesMMA(codigoCar));
+
+      logTo('log-auto', `[${i+1}/${zips.length}] ${file.name}: analisando cobertura MapBiomas (${ANO_MAXIMO})...`);
+      let mapbiomas = null;
+      try{
+        const contagem = await contarPixelsCOG(ANO_MAXIMO, geomImovel, minX, minY, maxX, maxY);
+        mapbiomas = {
+          lulc: {[String(ANO_MAXIMO)]: contagem},
+          meta: {area_total_ha: areaHa, anos:[ANO_MAXIMO], resolucao_m:30},
+        };
+      } catch(e){ logTo('log-auto', `   ⚠ MapBiomas: ${e.message}`); }
+
+      resultadosPorImovel.push({codigo: codigoCar || file.name, areaHa, sobreposicao, mapbiomas});
+      logTo('log-auto', `✔ ${file.name} concluído${codigoCar ? ` (CAR: ${codigoCar})` : ''}.`);
+    } catch(e){
+      logTo('log-auto', `✖ ${file.name}: ${e.message}`);
+      resultadosPorImovel.push({codigo: prefixo, erro: e.message});
+    }
+    prog.value = Math.round((i+1) / zips.length * 100);
+  }
+
+  logTo('log-auto', 'Gerando relatório consolidado...');
+  gerarRelatorioAutomatico(resultadosPorImovel);
+  logTo('log-auto', '✔ Análise da pasta concluída.');
+  btn.disabled = false;
+}
+
+/* ── MapBiomas (equivalente a mapbiomas.py) ───────────────────────── */
+function selAnos(anos){
+  for(const opt of $('sel-anos').options) opt.selected = anos.includes(Number(opt.value));
+}
+async function analisarMapBiomas(){
+  const camId = Number($('sel-mb-camada').value);
+  const cam = state.registro.find(c => c.id === camId);
+  const anos = [...$('sel-anos').selectedOptions].map(o => Number(o.value))
+    .filter(a => a >= ANO_MINIMO && a <= ANO_MAXIMO).sort();
+  if(!cam){ logTo('log-mb', '✖ Selecione uma camada vetorial.', true); return; }
+  if(!anos.length){ logTo('log-mb', '✖ Selecione ao menos um ano (1985–2024).', true); return; }
+
+  const geomUnida = unirFeatures(featuresPoligonais(cam.geojson));
+  if(!geomUnida){ logTo('log-mb', '✖ A camada não contém polígonos.', true); return; }
+
+  const btn = $('btn-mapbiomas'), prog = $('prog-mb');
+  btn.disabled = true; prog.style.display = 'block'; prog.value = 0;
+  logTo('log-mb', `Analisando ${anos.length} ano(s)...`, true);
+
+  const areaTotalHa = calcularAreaHa(geomUnida);
+  const [minX, minY, maxX, maxY] = turf.bbox(geomUnida);
+  const lulc = {};
+
+  for(let i = 0; i < anos.length; i++){
+    const ano = anos[i];
+    logTo('log-mb', `[${i+1}/${anos.length}] Lendo COG ${ano}...`);
+    try{
+      lulc[String(ano)] = await contarPixelsCOG(ano, geomUnida, minX, minY, maxX, maxY);
+    } catch(e){
+      lulc[String(ano)] = {erro: e.message};
+      logTo('log-mb', `   ⚠ ${ano}: ${e.message}`);
+    }
+    prog.value = Math.round((i+1) / anos.length * 100);
+  }
+
+  state.resultadoMapBiomas = {
+    lulc,
+    meta: {area_total_ha: areaTotalHa, anos, resolucao_m: 30},
+  };
+  renderMapBiomas();
+  logTo('log-mb', '✔ Análise concluída.');
+  btn.disabled = false;
+}
+async function contarPixelsCOG(ano, geom, minX, minY, maxX, maxY){
+  const tiff = await GeoTIFF.fromUrl(withProxy(COG_URL_LULC(ano)));
+  const image = await tiff.getImage();
+  const [ox, oy] = image.getOrigin();
+  const [rx, ry] = image.getResolution();      // ry é negativo (norte→sul)
+
+  let px0 = Math.floor((minX - ox) / rx),  px1 = Math.floor((maxX - ox) / rx) + 1;
+  let py0 = Math.floor((maxY - oy) / ry),  py1 = Math.floor((minY - oy) / ry) + 1;
+  px0 = Math.max(0, px0); py0 = Math.max(0, py0);
+  px1 = Math.min(image.getWidth(), px1); py1 = Math.min(image.getHeight(), py1);
+  if(px1 <= px0 || py1 <= py0) return {aviso:'Nenhum pixel encontrado na geometria.'};
+
+  const w = px1 - px0, h = py1 - py0;
+  if(w * h > 4_000_000)
+    throw new Error(`Janela muito grande (${w}×${h} px). Reduza a área de análise.`);
+
+  const rasters = await image.readRasters({window:[px0, py0, px1, py1]});
+  const data = rasters[0];
+
+  // Máscara por polígono quando viável; caso contrário usa o envelope (como o plugin)
+  const mascarar = w * h <= 250_000;
+  const contagem = {};
+  for(let row = 0; row < h; row++){
+    const lat = oy + (py0 + row + 0.5) * ry;
+    for(let col = 0; col < w; col++){
+      const v = data[row * w + col];
+      if(v <= 0) continue;
+      if(mascarar){
+        const lon = ox + (px0 + col + 0.5) * rx;
+        if(!turf.booleanPointInPolygon([lon, lat], geom)) continue;
+      }
+      contagem[v] = (contagem[v] || 0) + 1;
+    }
+  }
+  if(!Object.keys(contagem).length) return {aviso:'Nenhum pixel encontrado na geometria.'};
+
+  const totalHa = Object.values(contagem).reduce((s,n) => s + n, 0) * PIXEL_AREA_HA_30M;
+  const resultado = {};
+  for(const [codStr, nPix] of Object.entries(contagem).sort((a,b) => a[0]-b[0])){
+    const cod = Number(codStr);
+    const info = CLASSES_LULC[cod];
+    const ha = nPix * PIXEL_AREA_HA_30M;
+    resultado[info ? info.nome : `Classe ${cod}`] = {
+      ha: Math.round(ha*100)/100,
+      pct: Math.round((totalHa > 0 ? ha/totalHa*100 : 0)*100)/100,
+      pixels: nPix,
+      cor: info ? info.cor : '#aaaaaa',
+      codigo: cod,
+    };
+  }
+  return resultado;
+}
+function renderMapBiomas(){
+  const {lulc, meta} = state.resultadoMapBiomas;
+  let html = `<p class="hint" style="margin-top:10px">
+    Área total: <b>${meta.area_total_ha.toFixed(2)} ha</b> · Resolução: 30 m</p>`;
+  for(const ano of Object.keys(lulc).sort()){
+    const dados = lulc[ano];
+    html += `<h3>Ano ${ano}</h3>`;
+    if(dados.erro){ html += `<p class="hint">⚠ ${esc(dados.erro)}</p>`; continue; }
+    if(dados.aviso){ html += `<p class="hint">${esc(dados.aviso)}</p>`; continue; }
+    const linhas = Object.entries(dados).sort((a,b) => b[1].ha - a[1].ha)
+      .map(([classe, i]) => `<tr>
+        <td><span class="dot" style="background:${i.cor}"></span>${esc(classe)}</td>
+        <td style="text-align:right">${i.ha.toFixed(2)}</td>
+        <td style="text-align:right">${i.pct.toFixed(1)}%</td></tr>`).join('');
+    html += `<table class="res"><thead><tr><th>Classe</th>
+      <th style="text-align:right">ha</th><th style="text-align:right">%</th></tr></thead>
+      <tbody>${linhas}</tbody></table>`;
+  }
+  $('res-mapbiomas').innerHTML = html;
+}
+
+/* ── Camadas externas (equivalente a camadas_externas.py) ─────────── */
+function bboxMapa(){
+  const b = map.getBounds();
+  return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+}
+function urlWfs(info, bbox){
+  const typeParam = (info.version || '2.0.0').startsWith('2.') ? 'typenames' : 'typeName';
+  const p = new URLSearchParams({
+    service:'WFS', version:info.version || '2.0.0', request:'GetFeature',
+    [typeParam]: info.type_name,
+    outputFormat:'application/json', srsName:'EPSG:4326',
+    bbox:`${bbox.join(',')},EPSG:4326`,
+  });
+  for(const [k,v] of Object.entries(info.params || {})) p.set(k, v);
+  return `${info.url}?${p}`;
+}
+function urlArcgis(info, bbox){
+  const extra = {...(info.params || {})};
+  const p = new URLSearchParams({
+    where: extra.where || '1=1', returnGeometry:'true', outFields:'*', f:'geojson',
+    geometryType:'esriGeometryEnvelope',
+    geometry: JSON.stringify({xmin:bbox[0], ymin:bbox[1], xmax:bbox[2], ymax:bbox[3],
+      spatialReference:{wkid:4326}}),
+    inSR:'4326', outSR:'4326', spatialRel:'esriSpatialRelIntersects',
+  });
+  delete extra.where;
+  for(const [k,v] of Object.entries(extra)) p.set(k, v);
+  return `${info.url}?${p}`;
+}
+async function adicionarExterna(idx){
+  const info = CAMADAS_EXTERNAS[idx];
+  if(info.tipo === 'wms'){ adicionarCamadaWMS(info); return; }
+  const btns = document.querySelectorAll(`#catalogo button[data-idx="${idx}"]`);
+  btns.forEach(b => b.disabled = true);
+  try{
+    const bbox = bboxMapa();
+    const gj = await fetchJson(info.tipo === 'wfs' ? urlWfs(info, bbox) : urlArcgis(info, bbox));
+    let feats = gj.features || [];
+    if(info.attr_filter) feats = feats.filter(f => matchAttr(f, info.attr_filter));
+    if(!feats.length){ toast(`"${info.titulo}": nenhuma feição na área visível do mapa.`, 'warn'); return; }
+    adicionarCamadaVetorial(info.titulo, turf.featureCollection(feats), 'EXTERNA', false);
+  } catch(e){
+    toast(`Falha ao carregar "${info.titulo}": ${e.message}. Se for bloqueio de CORS, configure um proxy em Configurações.`, 'error', 7000);
+  } finally { btns.forEach(b => b.disabled = false); }
+}
+function montarCatalogo(){
+  const porGrupo = {};
+  CAMADAS_EXTERNAS.forEach((c, i) => (porGrupo[c.grupo] ??= []).push([c, i]));
+  $('catalogo').innerHTML = Object.entries(porGrupo).map(([grupo, itens]) => `
+    <div class="cat-grupo">${esc(grupo)}</div>
+    ${itens.map(([c, i]) => `
+      <div class="cat-item">
+        <span class="nome">${esc(c.titulo)} <span>(${c.tipo.toUpperCase()})</span></span>
+        <button class="btn mini" data-idx="${i}" onclick="adicionarExterna(${i})"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="margin-right:4px;vertical-align:-1px"><path d="M12 5v14M5 12h14"/></svg>Adicionar</button>
+      </div>`).join('')}`).join('');
+}
+
+/* ── Sobreposição (equivalente a verificar_sobreposicao.py) ───────── */
+function matchAttr(feature, attrF){
+  const props = feature.properties || {};
+  const op = attrF.op || 'eq';
+  const candidatos = attrF.campos || [attrF.campo];
+  let raw = null;
+  for(const c of candidatos) if(c && c in props){ raw = props[c]; break; }
+
+  if(op === 'eq') return String(raw).toLowerCase() === String(attrF.valor).toLowerCase();
+
+  const n = Number(attrF.valor);
+  let v = Number(raw);
+  if(!Number.isFinite(v)){
+    const m = /\b(19|20)\d{2}\b/.exec(String(raw ?? ''));
+    if(!m) return false;
+    v = Number(m[0]);
+  }
+  if(op === 'gte') return v >= n;
+  if(op === 'gt')  return v >  n;
+  if(op === 'lte') return v <= n;
+  if(op === 'lt')  return v <  n;
+  return true;
+}
+function intersecta(geomImovel, feature){
+  try{
+    if(!feature.geometry) return false;
+    if(!turf.booleanIntersects(geomImovel, feature)) return false;
+    // Polígonos: exige área mínima (~1 m²), como no plugin
+    if(['Polygon','MultiPolygon'].includes(feature.geometry.type)){
+      const inter = turf.intersect(turf.featureCollection([geomImovel, feature]));
+      return !!inter && turf.area(inter) > 1;
+    }
+    return true;
+  } catch { return false; }
+}
+function extrairDetalhes(info, sobrep){
+  if(!sobrep.length) return [];
+  const tituloUp = (info.titulo || '').toUpperCase();
+
+  if(tituloUp.includes('PRODES')){
+    const anos = new Set();
+    for(const f of sobrep){
+      const props = f.properties || {};
+      for(const campo of ['year','YEAR','ano','ANO','year_deforestation']){
+        const v = props[campo];
+        if(v){
+          const m = /\b(19|20)\d{2}\b/.exec(String(v));
+          if(m) anos.add(m[0]);
+        }
+      }
+    }
+    return anos.size ? [`Ano(s) de desmatamento: ${[...anos].sort().join(', ')}`]
+                     : [`${sobrep.length} polígono(s) sobrepostos.`];
+  }
+  if(tituloUp.includes('ZSEE')){
+    const sub = new Set();
+    for(const f of sobrep){
+      const s = (f.properties || {}).SUBZONA || (f.properties || {}).subzona;
+      if(s) sub.add(String(s).trim());
+    }
+    return sub.size ? [`Subzona(s): ${[...sub].sort().join(', ')}`] : [];
+  }
+  if(['ASSENTAMENTO','QUILOMBOLA'].some(x => tituloUp.includes(x))){
+    const nomes = [];
+    for(const f of sobrep.slice(0, 5)){
+      const props = f.properties || {};
+      for(const campo of ['nome','NOME','name','Name'])
+        if(props[campo]){ nomes.push(String(props[campo]).trim()); break; }
+    }
+    return [...new Set(nomes)];
+  }
+  return [`${sobrep.length} feição(ões) sobrepost(as).`];
+}
+async function verificarExterna(info, geomImovel, bbox){
+  const titulo = info.titulo;
+  try{
+    const gj = await fetchJson(info.tipo === 'wfs' ? urlWfs(info, bbox) : urlArcgis(info, bbox));
+    let feats = gj.features || [];
+    if(info.attr_filter) feats = feats.filter(f => matchAttr(f, info.attr_filter));
+    let sobrep = feats.filter(f => intersecta(geomImovel, f));
+    if(info.sobrep_filter) sobrep = sobrep.filter(f => matchAttr(f, info.sobrep_filter));
+    return {camada:titulo, sobreposicao:!!sobrep.length, erroConsulta:false,
+      statusTexto: sobrep.length ? 'Consta' : 'Não consta',
+      detalhes: extrairDetalhes(info, sobrep), count: sobrep.length};
+  } catch(e){
+    return {camada:titulo, sobreposicao:false, erroConsulta:true,
+      statusTexto:'Não verificada', detalhes:[`Erro: ${e.message}`], count:0};
+  }
+}
+async function consultarProdesMMA(codigoCar){
+  if(!codigoCar)
+    return {camada:'Listas MCR/PRODES MMA', sobreposicao:false, erroConsulta:true,
+      statusTexto:'Não verificada', detalhes:['Código CAR não disponível para consulta.'], count:0};
+
+  const encontrados = [], falhas = [];
+  for(const lista of LISTAS_PRODES_MMA){
+    try{
+      const p = new URLSearchParams({
+        where:`cod_imovel='${codigoCar.replaceAll("'", "''")}'`,
+        outFields: CAMPOS_PRODES_MMA.join(','),
+        returnGeometry:'false', resultRecordCount:'10', f:'json',
+      });
+      const data = await fetchJson(`${lista.url}?${p}`);
+      for(const feat of data.features || []){
+        const attrs = feat.attributes || feat.properties || {};
+        encontrados.push({bioma:lista.bioma, attrs});
+      }
+    } catch { falhas.push(lista.bioma); }
+  }
+  if(encontrados.length){
+    const detalhes = encontrados.map(({bioma, attrs:a}) => {
+      const partes = [`Bioma: ${bioma}`];
+      if(a.municipio) partes.push(`Município: ${a.municipio}`);
+      if(a.uf) partes.push(`UF: ${a.uf}`);
+      if(a.soma_desmat != null) partes.push(`Desmatamento acumulado: ${Number(a.soma_desmat).toFixed(2)} ha`);
+      const anos = CAMPOS_PRODES_MMA
+        .filter(c => c.startsWith('sobrep_prodes_') && a[c] && Number(a[c]) > 0)
+        .map(c => `${c.replace('sobrep_prodes_','')}: ${Number(a[c]).toFixed(2)} ha`);
+      if(anos.length) partes.push('PRODES por ano — ' + anos.join(', '));
+      if(a.resultados) partes.push(`Resultado: ${a.resultados}`);
+      return partes.join(' | ');
+    });
+    return {camada:'Listas MCR/PRODES MMA', sobreposicao:true, erroConsulta:false,
+      statusTexto:'Consta', detalhes, count:encontrados.length};
+  }
+  const todasFalharam = falhas.length === LISTAS_PRODES_MMA.length;
+  return {camada:'Listas MCR/PRODES MMA', sobreposicao:false, erroConsulta:todasFalharam,
+    statusTexto: todasFalharam ? 'Não verificada' : 'Não consta',
+    detalhes: todasFalharam
+      ? [`Falha ao consultar: ${falhas.join(', ')}`]
+      : ['CAR não localizado nas listas MCR/PRODES MMA.',
+         ...(falhas.length ? [`Falha parcial em: ${falhas.join(', ')}`] : [])],
+    count:0};
+}
+async function verificarSobreposicao(){
+  const camId = Number($('sel-sobrep-imovel').value);
+  const cam = state.registro.find(c => c.id === camId);
+  if(!cam){ logTo('log-sobrep', '✖ Selecione a camada do imóvel.', true); return; }
+
+  const geomImovel = unirFeatures(featuresPoligonais(cam.geojson));
+  if(!geomImovel){ logTo('log-sobrep', '✖ A camada não contém polígonos.', true); return; }
+
+  const [minX, minY, maxX, maxY] = turf.bbox(geomImovel);
+  const buf = 0.012;                                   // ~1,3 km, como no plugin
+  const bbox = [minX-buf, minY-buf, maxX+buf, maxY+buf];
+  const externas = CAMADAS_EXTERNAS.filter(c =>
+    c.tipo !== 'wms' && !c.ignorar_sobreposicao);
+  const total = externas.length + 1;
+
+  const btn = $('btn-sobrep'), prog = $('prog-sobrep');
+  btn.disabled = true; prog.style.display = 'block'; prog.value = 0;
+  logTo('log-sobrep', 'Iniciando verificação...', true);
+
+  const resultados = [];
+  for(let i = 0; i < externas.length; i++){
+    logTo('log-sobrep', `[${i+1}/${total}] ${externas[i].titulo}`);
+    resultados.push(await verificarExterna(externas[i], geomImovel, bbox));
+    prog.value = Math.round((i+1) / total * 80);
+  }
+  logTo('log-sobrep', 'Consultando Listas MCR/PRODES MMA...');
+  prog.value = 88;
+  resultados.push(await consultarProdesMMA(state.codigoCar || $('inp-car-1').value.trim().toUpperCase()));
+  prog.value = 100;
+  logTo('log-sobrep', '✔ Verificação concluída.');
+
+  state.resultadoSobrep = {resultados, camadaId: camId,
+    areaHa: calcularAreaHa(cam.geojson)};
+  renderSobreposicao();
+  btn.disabled = false;
+}
+function renderSobreposicao(){
+  const {resultados} = state.resultadoSobrep;
+  const ordem = r => r.sobreposicao && !r.erroConsulta ? 0 : r.erroConsulta ? 1 : 2;
+  const cls = r => r.sobreposicao ? 'red' : r.erroConsulta ? 'amber' : 'green';
+  $('res-sobrep').innerHTML = [...resultados]
+    .sort((a,b) => ordem(a)-ordem(b) || a.camada.localeCompare(b.camada))
+    .map(r => `
+    <div class="sobrep-item">
+      <div class="cab">
+        <span>${esc(r.camada)}${r.count ? ` <span class="count">(${r.count})</span>` : ''}</span>
+        <span class="badge ${cls(r)}">${esc(r.statusTexto)}</span>
+      </div>
+      ${r.detalhes?.length ? `<ul>${r.detalhes.map(d => `<li>${esc(d)}</li>`).join('')}</ul>` : ''}
+    </div>`).join('');
+}
+
+/* ── Relatórios (equivalente a relatorio.py) ──────────────────────── */
+function abrirRelatorio(html){
+  // Blob + <a target="_blank"> em vez de window.open(): é tratado como clique
+  // direto do usuário e não é interceptado por bloqueadores de pop-up.
+  const blob = new Blob([html], {type: 'text/html'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+function relExtratoAmbiental(){
+  const camId = Number($('sel-rel-imovel').value);
+  const imovel = state.registro.find(c => c.id === camId);
+  if(!imovel){ toast('Selecione a camada do imóvel.', 'warn'); return; }
+  const areaImovel = calcularAreaHa(imovel.geojson);
+
+  let rows = '';
+  for(const c of camadasVetoriais()){
+    if(c.id === camId) continue;
+    const area = calcularAreaHa(c.geojson);
+    const pct = areaImovel > 0 ? area/areaImovel*100 : 0;
+    rows += `<tr><td>${esc(c.nome)}</td><td>${area.toFixed(4)}</td><td>${pct.toFixed(2)}%</td></tr>\n`;
+  }
+  abrirRelatorio(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Extrato Ambiental – BondGis</title><style>
+  body{font-family:Arial,sans-serif;margin:30px;color:#222}
+  h1{color:#1a7f4b;margin-bottom:4px} p{margin:4px 0}
+  table{border-collapse:collapse;width:100%;margin-top:16px}
+  th,td{border:1px solid #ccc;padding:8px 12px;text-align:left}
+  th{background:#1a7f4b;color:#fff} tr:nth-child(even){background:#f5f5f5}
+  .footer{margin-top:20px;font-size:.85em;color:#888}
+</style></head><body>
+<h1>Extrato de Análise Ambiental</h1>
+<p><strong>Área do Imóvel:</strong> ${areaImovel.toFixed(4)} ha</p>
+<p><strong>Data:</strong> ${agora()}</p>
+<table><thead><tr><th>Camada</th><th>Área (ha)</th><th>% do Imóvel</th></tr></thead>
+<tbody>${rows}</tbody></table>
+<p class="footer">Gerado por BondGis – Análise Ambiental</p>
+</body></html>`);
+}
+function relExtratoTemporal(){
+  const res = state.resultadoMapBiomas;
+  if(!res){ toast('Execute a análise MapBiomas primeiro.', 'warn'); return; }
+  const {lulc, meta} = res;
+  const anos = Object.keys(lulc).sort();
+  const classesCor = {};
+  for(const anoData of Object.values(lulc))
+    if(anoData && !anoData.erro && !anoData.aviso)
+      for(const [nome, info] of Object.entries(anoData))
+        classesCor[nome] ??= info.cor || '#aaa';
+
+  const header = '<tr><th>Classe</th>' + anos.map(a => `<th>${a}</th>`).join('') + '</tr>';
+  let rows = '';
+  for(const classe of Object.keys(classesCor).sort()){
+    const cells = anos.map(ano => {
+      const d = lulc[ano];
+      return d && d[classe] ? `<td>${d[classe].ha.toFixed(2)}</td>` : '<td>–</td>';
+    }).join('');
+    const dot = `<span style="background:${classesCor[classe]};display:inline-block;width:12px;height:12px;margin-right:6px;border-radius:2px;vertical-align:middle"></span>`;
+    rows += `<tr><td>${dot}${esc(classe)}</td>${cells}</tr>\n`;
+  }
+  abrirRelatorio(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Extrato Temporal MapBiomas – BondGis</title><style>
+  body{font-family:Arial,sans-serif;margin:30px;color:#222}
+  h1{color:#1a7f4b;margin-bottom:4px} p{margin:4px 0}
+  table{border-collapse:collapse;width:100%;margin-top:16px;font-size:.88em}
+  th,td{border:1px solid #ccc;padding:6px 10px;text-align:left;white-space:nowrap}
+  th{background:#1a7f4b;color:#fff} tr:nth-child(even){background:#f5f5f5}
+  .footer{margin-top:20px;font-size:.82em;color:#888}
+</style></head><body>
+<h1>Extrato Temporal – Cobertura do Solo (MapBiomas Coleção 10.1)</h1>
+<p><strong>Área do Imóvel:</strong> ${meta.area_total_ha.toFixed(4)} ha |
+   <strong>Resolução:</strong> ${meta.resolucao_m} m |
+   <strong>Anos:</strong> ${anos.join(', ')}</p>
+<p><strong>Data:</strong> ${agora()}</p>
+<table><thead>${header}</thead><tbody>${rows}</tbody></table>
+<p class="footer">Fonte: MapBiomas Brasil Coleção 10.1 &nbsp;|&nbsp; BondGis</p>
+</body></html>`);
+}
+function exportarCsvTemporal(){
+  const res = state.resultadoMapBiomas;
+  if(!res){ toast('Execute a análise MapBiomas primeiro.', 'warn'); return; }
+  const lulc = res.lulc;
+  const anos = Object.keys(lulc).sort();
+  const classes = new Set();
+  for(const d of Object.values(lulc))
+    if(d && !d.erro && !d.aviso) Object.keys(d).forEach(c => classes.add(c));
+
+  const linhas = [['Classe', ...anos]];
+  for(const classe of [...classes].sort()){
+    linhas.push([classe, ...anos.map(ano =>
+      lulc[ano]?.[classe] ? String(Math.round(lulc[ano][classe].ha*100)/100) : '')]);
+  }
+  const csv = '﻿' + linhas.map(l =>
+    l.map(v => /[",;\n]/.test(v) ? `"${v.replaceAll('"','""')}"` : v).join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
+  a.download = 'lyssa_cobertura_temporal.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+/* ── Helpers de renderização compartilhados por relSobreposicao e pela
+   análise automática em lote (evita duplicar a lógica dos dois relatórios) */
+function renderLinhasSobreposicao(resultados){
+  const comSobrep = resultados.filter(r => r.sobreposicao && !r.erroConsulta);
+  const comErro   = resultados.filter(r => r.erroConsulta);
+  const semSobrep = resultados.filter(r => !r.sobreposicao && !r.erroConsulta);
+  const porNome = (a,b) => a.camada.localeCompare(b.camada);
+  const ordenados = [...comSobrep.sort(porNome), ...comErro.sort(porNome), ...semSobrep.sort(porNome)];
+
+  const rows = ordenados.map(r => {
+    const badge = r.sobreposicao ? `<span class="badge red">${esc(r.statusTexto)}</span>`
+      : r.erroConsulta ? `<span class="badge amber">${esc(r.statusTexto)}</span>`
+      : `<span class="badge green">${esc(r.statusTexto)}</span>`;
+    const det = r.detalhes?.length
+      ? '<ul>' + r.detalhes.map(d => `<li>${esc(d)}</li>`).join('') + '</ul>' : '';
+    return `<tr><td>${esc(r.camada)}</td>
+      <td style="text-align:center">${badge}</td>
+      <td style="text-align:center">${r.count || '–'}</td>
+      <td class="det">${det}</td></tr>`;
+  }).join('\n');
+
+  return {rows, comSobrep, comErro, semSobrep};
+}
+
+function renderSecaoMapBiomasHtml(mapbiomas){
+  if(!mapbiomas) return '';
+  const anos = Object.keys(mapbiomas.lulc).sort();
+  const anoRef = anos[anos.length-1];
+  const dados = mapbiomas.lulc[anoRef];
+  if(!dados || dados.erro || dados.aviso) return '';
+  const mbRows = Object.entries(dados).sort((a,b) => a[0].localeCompare(b[0]))
+    .map(([classe, i]) => `<tr>
+      <td><span style="background:${i.cor};display:inline-block;width:12px;height:12px;margin-right:6px;border-radius:2px;vertical-align:middle"></span>${esc(classe)}</td>
+      <td style="text-align:right">${i.ha.toFixed(2)}</td>
+      <td style="text-align:right">${i.pct.toFixed(1)}%</td></tr>`).join('\n');
+  return `
+<h2 style="color:#1a7f4b;margin-top:32px">MapBiomas – Cobertura do Solo (${anoRef})</h2>
+<p style="font-size:.85em;color:#555">Fonte: MapBiomas Brasil Coleção 10.1 &nbsp;|&nbsp; Resolução: 30 m</p>
+<table><thead><tr><th>Classe</th><th style="text-align:right">Área (ha)</th>
+<th style="text-align:right">%</th></tr></thead><tbody>${mbRows}</tbody></table>`;
+}
+
+function relSobreposicao(){
+  const st = state.resultadoSobrep;
+  if(!st){ toast('Execute a verificação de sobreposição primeiro (aba Camadas).', 'warn'); return; }
+  const resultados = st.resultados;
+  const {rows, comSobrep, comErro, semSobrep} = renderLinhasSobreposicao(resultados);
+  const mbSection = renderSecaoMapBiomasHtml(state.resultadoMapBiomas);
+
+  const codigoCar = state.codigoCar || $('inp-car-1').value.trim().toUpperCase();
+  const carDisplay = codigoCar ? esc(codigoCar) : '<em>Não identificado</em>';
+  const areaDisplay = st.areaHa ? `${st.areaHa.toFixed(4)} ha` : '—';
+  const dataHora = agora();
+
+  abrirRelatorio(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Extrato de Análise Ambiental – BondGis</title><style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Segoe UI",Arial,sans-serif;background:#f4f6f8;color:#1a2530}
+  .header{background:#0a2b36;color:#fff;padding:24px 32px 20px}
+  .header .tag{background:#1a7f4b;color:#fff;font-size:.72em;padding:3px 10px;border-radius:12px;letter-spacing:1px;text-transform:uppercase}
+  .header h1{font-size:1.5em;margin:8px 0 4px}
+  .header .car{color:#a8d5c2;font-size:.9em}
+  .content{max-width:960px;margin:0 auto;padding:24px 16px 40px}
+  .cards{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+  .card{background:#fff;border-radius:8px;padding:14px 20px;min-width:140px;box-shadow:0 1px 4px rgba(0,0,0,.08);flex:1}
+  .card .n{font-size:2em;font-weight:700;line-height:1}
+  .card .l{font-size:.8em;color:#666;margin-top:4px}
+  .card.red .n{color:#c0392b}.card.green .n{color:#1a7f4b}
+  .card.amber .n{color:#d68910}.card.blue .n{color:#1a5276}
+  .meta{background:#fff;border-radius:8px;padding:12px 20px;margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);display:flex;gap:32px;flex-wrap:wrap}
+  .meta span{font-size:.88em;color:#555} .meta strong{color:#1a2530}
+  table{border-collapse:collapse;width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+  th{background:#1a7f4b;color:#fff;padding:10px 14px;text-align:left;font-size:.85em}
+  td{border-bottom:1px solid #eee;padding:9px 14px;font-size:.87em;vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td.det ul{margin:4px 0 0 14px;padding:0;color:#444;font-size:.93em}
+  .badge{padding:3px 10px;border-radius:12px;font-size:.78em;font-weight:600;white-space:nowrap}
+  .badge.red{background:#fce8e6;color:#c0392b}
+  .badge.green{background:#e9f7ef;color:#1a7f4b}
+  .badge.amber{background:#fef9e7;color:#d68910}
+  .footer{text-align:center;margin-top:32px;font-size:.8em;color:#999}
+  h2{margin-top:28px;margin-bottom:12px}
+</style></head><body>
+<div class="header">
+  <div class="tag">Análise Ambiental</div>
+  <h1>Relatório de Sobreposição</h1>
+  <div class="car">CAR: ${carDisplay}</div>
+</div>
+<div class="content">
+  <div class="meta">
+    <span><strong>Área do Imóvel:</strong> ${areaDisplay}</span>
+    <span><strong>Data da análise:</strong> ${esc(dataHora)}</span>
+    <span><strong>Camadas verificadas:</strong> ${resultados.length}</span>
+  </div>
+  <div class="cards">
+    <div class="card red"><div class="n">${comSobrep.length}</div><div class="l">Com sobreposição</div></div>
+    <div class="card green"><div class="n">${semSobrep.length}</div><div class="l">Sem sobreposição</div></div>
+    <div class="card amber"><div class="n">${comErro.length}</div><div class="l">Não verificadas</div></div>
+    <div class="card blue"><div class="n">${resultados.length}</div><div class="l">Total consultadas</div></div>
+  </div>
+  <h2 style="color:#1a7f4b">Resultado por Camada</h2>
+  <table><thead><tr>
+    <th style="width:38%">Camada</th><th style="width:14%;text-align:center">Status</th>
+    <th style="width:9%;text-align:center">Qtd</th><th>Detalhes</th>
+  </tr></thead><tbody>${rows}</tbody></table>
+  ${mbSection}
+  <p class="footer">Gerado por BondGis – Análise Ambiental &nbsp;|&nbsp; ${esc(dataHora)}</p>
+</div></body></html>`);
+}
+
+/* ── Análise automática em lote (até 5 imóveis) ───────────────────────
+   Para cada código CAR informado: busca área + camadas subsidiárias no
+   SICAR, verifica sobreposição com todas as fontes externas + PRODES MMA,
+   analisa a cobertura MapBiomas do ano mais recente, e ao final consolida
+   tudo em um único relatório. */
+async function analisarAutomaticamente(){
+  const codigos = [1,2,3,4,5]
+    .map(i => $(`inp-car-${i}`).value.trim().toUpperCase())
+    .filter(Boolean);
+  if(!codigos.length){ toast('Informe ao menos um código CAR.', 'warn'); return; }
+
+  const btn = $('btn-analise-automatica'), prog = $('prog-auto');
+  btn.disabled = true; prog.style.display = 'block'; prog.value = 0;
+  logTo('log-auto', `Iniciando análise automática de ${codigos.length} imóvel(is)...`, true);
+
+  const resultadosPorImovel = [];
+  for(let i = 0; i < codigos.length; i++){
+    const codigo = codigos[i];
+    try{
+      const uf = extrairUF(codigo);
+      if(!uf) throw new Error('Código CAR inválido.');
+
+      logTo('log-auto', `[${i+1}/${codigos.length}] ${codigo}: buscando área do imóvel...`);
+      const geojson = await fetchJson(
+        wfsCarUrl(SICAR_AREA_WFS_URL, `sicar:sicar_imoveis_${uf}`, '1.0.0', codigo));
+      if(!geojson.features?.length) throw new Error('Imóvel não encontrado no SICAR.');
+      const item = adicionarCamadaVetorial(`CAR_${codigo}_Área do Imóvel`, geojson, 'AREA_IMOVEL', i === 0);
+
+      logTo('log-auto', `[${i+1}/${codigos.length}] ${codigo}: buscando camadas subsidiárias...`);
+      let nCamadas = 0;
+      for(const cam of CAMADAS_CONSULTA){
+        try{
+          const gj = await fetchJson(
+            wfsCarUrl(SICAR_CONSULTA_WFS_URL, cam.typeName, '2.0.0', codigo));
+          if(gj.features?.length){
+            adicionarCamadaVetorial(`CAR_${codigo}_${cam.rotulo}`, gj, cam.grupo, false);
+            nCamadas++;
+          }
+        } catch(e){ logTo('log-auto', `   ⚠ ${cam.rotulo}: ${e.message}`); }
+      }
+      logTo('log-auto', `   ✔ ${nCamadas} camada(s) subsidiária(s).`);
+
+      const geomImovel = unirFeatures(featuresPoligonais(item.geojson));
+      if(!geomImovel) throw new Error('Geometria do imóvel inválida.');
+      const areaHa = calcularAreaHa(item.geojson);
+      const [minX, minY, maxX, maxY] = turf.bbox(geomImovel);
+      const buf = 0.012;
+      const bbox = [minX-buf, minY-buf, maxX+buf, maxY+buf];
+
+      logTo('log-auto', `[${i+1}/${codigos.length}] ${codigo}: verificando sobreposição...`);
+      const externas = CAMADAS_EXTERNAS.filter(c => c.tipo !== 'wms' && !c.ignorar_sobreposicao);
+      const sobreposicao = [];
+      for(const info of externas) sobreposicao.push(await verificarExterna(info, geomImovel, bbox));
+      sobreposicao.push(await consultarProdesMMA(codigo));
+
+      logTo('log-auto', `[${i+1}/${codigos.length}] ${codigo}: analisando cobertura MapBiomas (${ANO_MAXIMO})...`);
+      let mapbiomas = null;
+      try{
+        const contagem = await contarPixelsCOG(ANO_MAXIMO, geomImovel, minX, minY, maxX, maxY);
+        mapbiomas = {
+          lulc: {[String(ANO_MAXIMO)]: contagem},
+          meta: {area_total_ha: areaHa, anos:[ANO_MAXIMO], resolucao_m:30},
+        };
+      } catch(e){ logTo('log-auto', `   ⚠ MapBiomas: ${e.message}`); }
+
+      resultadosPorImovel.push({codigo, areaHa, sobreposicao, mapbiomas});
+      logTo('log-auto', `✔ ${codigo} concluído.`);
+    } catch(e){
+      logTo('log-auto', `✖ ${codigo}: ${e.message}`);
+      resultadosPorImovel.push({codigo, erro: e.message});
+    }
+    prog.value = Math.round((i+1) / codigos.length * 100);
+  }
+
+  logTo('log-auto', 'Gerando relatório consolidado...');
+  gerarRelatorioAutomatico(resultadosPorImovel);
+  logTo('log-auto', '✔ Análise automática concluída.');
+  btn.disabled = false;
+}
+
+function gerarRelatorioAutomatico(lista){
+  const now = agora();
+  const sucesso = lista.filter(i => !i.erro).length;
+
+  const secoes = lista.map(item => {
+    if(item.erro){
+      return `
+  <div class="imovel-section">
+    <h2 style="color:#c0392b">CAR: ${esc(item.codigo)}</h2>
+    <p style="color:#c0392b">Falha na análise: ${esc(item.erro)}</p>
+  </div>`;
+    }
+    const {rows, comSobrep, comErro, semSobrep} = renderLinhasSobreposicao(item.sobreposicao);
+    const mbSection = renderSecaoMapBiomasHtml(item.mapbiomas);
+    return `
+  <div class="imovel-section">
+    <h2 style="color:#1a7f4b">CAR: ${esc(item.codigo)}</h2>
+    <div class="meta">
+      <span><strong>Área do Imóvel:</strong> ${item.areaHa.toFixed(4)} ha</span>
+      <span><strong>Camadas verificadas:</strong> ${item.sobreposicao.length}</span>
+    </div>
+    <div class="cards">
+      <div class="card red"><div class="n">${comSobrep.length}</div><div class="l">Com sobreposição</div></div>
+      <div class="card green"><div class="n">${semSobrep.length}</div><div class="l">Sem sobreposição</div></div>
+      <div class="card amber"><div class="n">${comErro.length}</div><div class="l">Não verificadas</div></div>
+    </div>
+    <table><thead><tr>
+      <th style="width:38%">Camada</th><th style="width:14%;text-align:center">Status</th>
+      <th style="width:9%;text-align:center">Qtd</th><th>Detalhes</th>
+    </tr></thead><tbody>${rows}</tbody></table>
+    ${mbSection}
+  </div>`;
+  }).join('\n<hr style="border:none;border-top:1px solid #ddd;margin:36px 0">\n');
+
+  abrirRelatorio(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Análise Automática – BondGis</title><style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Segoe UI",Arial,sans-serif;background:#f4f6f8;color:#1a2530}
+  .header{background:#0a2b36;color:#fff;padding:24px 32px 20px}
+  .header .tag{background:#1a7f4b;color:#fff;font-size:.72em;padding:3px 10px;border-radius:12px;letter-spacing:1px;text-transform:uppercase}
+  .header h1{font-size:1.5em;margin:8px 0 4px}
+  .header .sub{color:#a8d5c2;font-size:.9em}
+  .content{max-width:960px;margin:0 auto;padding:24px 16px 40px}
+  .meta{background:#fff;border-radius:8px;padding:12px 20px;margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);display:flex;gap:32px;flex-wrap:wrap}
+  .meta span{font-size:.88em;color:#555} .meta strong{color:#1a2530}
+  .cards{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+  .card{background:#fff;border-radius:8px;padding:14px 20px;min-width:140px;box-shadow:0 1px 4px rgba(0,0,0,.08);flex:1}
+  .card .n{font-size:2em;font-weight:700;line-height:1}
+  .card .l{font-size:.8em;color:#666;margin-top:4px}
+  .card.red .n{color:#c0392b}.card.green .n{color:#1a7f4b}.card.amber .n{color:#d68910}
+  table{border-collapse:collapse;width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-top:8px}
+  th{background:#1a7f4b;color:#fff;padding:10px 14px;text-align:left;font-size:.85em}
+  td{border-bottom:1px solid #eee;padding:9px 14px;font-size:.87em;vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td.det ul{margin:4px 0 0 14px;padding:0;color:#444;font-size:.93em}
+  .badge{padding:3px 10px;border-radius:12px;font-size:.78em;font-weight:600;white-space:nowrap}
+  .badge.red{background:#fce8e6;color:#c0392b}
+  .badge.green{background:#e9f7ef;color:#1a7f4b}
+  .badge.amber{background:#fef9e7;color:#d68910}
+  .footer{text-align:center;margin-top:32px;font-size:.8em;color:#999}
+  h2{margin-top:8px;margin-bottom:12px}
+</style></head><body>
+<div class="header">
+  <div class="tag">Análise Automática</div>
+  <h1>Relatório Consolidado de Análise Ambiental</h1>
+  <div class="sub">${sucesso} de ${lista.length} imóvel(is) analisado(s) com sucesso &nbsp;|&nbsp; ${esc(now)}</div>
+</div>
+<div class="content">
+${secoes}
+  <p class="footer">Gerado por BondGis – Análise Ambiental &nbsp;|&nbsp; ${esc(now)}</p>
+</div>
+</body></html>`);
+}
+
+/* ── Configurações ────────────────────────────────────────────────── */
+function abrirCfg(){
+  $('inp-proxy').value = cfg.proxy;
+  $('modal-cfg').classList.add('on');
+}
+function salvarCfg(){
+  cfg.proxy = $('inp-proxy').value.trim();
+  localStorage.setItem('lyssa_proxy', cfg.proxy);
+  $('modal-cfg').classList.remove('on');
+}
+
+/* ── Inicialização da UI ──────────────────────────────────────────── */
+document.querySelectorAll('#tabs button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#tabs button').forEach(b => b.classList.remove('ativo'));
+    document.querySelectorAll('.painel').forEach(p => p.classList.remove('ativo'));
+    btn.classList.add('ativo');
+    $('tab-' + btn.dataset.tab).classList.add('ativo');
+    fecharMenuMobile();
+  });
+});
+
+// Tema (dark/light)
+function aplicarTema(t){
+  document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem('bondgis_theme', t);
+}
+$('btn-theme').addEventListener('click', () => {
+  const atual = document.documentElement.getAttribute('data-theme') || 'dark';
+  aplicarTema(atual === 'dark' ? 'light' : 'dark');
+});
+
+// Menu mobile (sidebar em drawer)
+function abrirMenuMobile(){
+  $('sidebar').classList.add('open');
+  $('sidebar-overlay').classList.add('on');
+}
+function fecharMenuMobile(){
+  $('sidebar').classList.remove('open');
+  $('sidebar-overlay').classList.remove('on');
+}
+$('btn-mobile-menu').addEventListener('click', abrirMenuMobile);
+$('sidebar-overlay').addEventListener('click', fecharMenuMobile);
+window.addEventListener('resize', () => {
+  if(window.innerWidth > 900) fecharMenuMobile();
+  map.invalidateSize();
+});
+setTimeout(() => map.invalidateSize(), 200);
+
+// Anos
+const selAnosEl = $('sel-anos');
+for(let a = ANO_MAXIMO; a >= ANO_MINIMO; a--){
+  const o = document.createElement('option');
+  o.value = a; o.textContent = a;
+  if(a === ANO_MAXIMO) o.selected = true;
+  selAnosEl.appendChild(o);
+}
+
+// Dropzone do ZIP
+const dz = $('dropzone');
+dz.addEventListener('click', () => $('inp-zip').click());
+$('inp-zip').addEventListener('change', e => {
+  if(e.target.files[0]) importarZip(e.target.files[0]);
+  e.target.value = '';
+});
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('hover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('hover'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('hover');
+  const f = e.dataTransfer.files[0];
+  if(f?.name.toLowerCase().endsWith('.zip')) importarZip(f);
+  else logTo('log-car', '✖ Solte um arquivo .zip.', true);
+});
+
+// Seleção de pasta com vários ZIPs do CAR
+$('dropzone-pasta').addEventListener('click', () => $('inp-pasta').click());
+$('inp-pasta').addEventListener('change', e => {
+  const zips = [...e.target.files].filter(f => f.name.toLowerCase().endsWith('.zip'));
+  e.target.value = '';
+  if(!zips.length){ toast('Nenhum arquivo .zip encontrado na pasta selecionada.', 'warn'); return; }
+  analisarPastaZips(zips);
+});
+
+// Botões
+$('btn-buscar-car').addEventListener('click', buscarSicar);
+$('btn-analise-automatica').addEventListener('click', analisarAutomaticamente);
+$('btn-mapbiomas').addEventListener('click', analisarMapBiomas);
+$('btn-sobrep').addEventListener('click', verificarSobreposicao);
+$('btn-rel-ambiental').addEventListener('click', relExtratoAmbiental);
+$('btn-rel-temporal').addEventListener('click', relExtratoTemporal);
+$('btn-rel-csv').addEventListener('click', exportarCsvTemporal);
+$('btn-rel-sobrep').addEventListener('click', relSobreposicao);
+
+montarCatalogo();
+atualizarUICamadas();
+</script>
+</body>
+</html>
