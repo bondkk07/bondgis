@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "BondGis: abrir no navegador",
+      "type": "pwa-msedge",
+      "request": "launch",
+      "url": "http://localhost:8321",
+      "webRoot": "${workspaceFolder}",
+      "preLaunchTask": "BondGis: iniciar servidor local"
+    }
+  ]
+}
