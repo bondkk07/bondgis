@@ -17,9 +17,21 @@ logger = logging.getLogger("bondgis.ee")
 _initialized = False
 
 
+HIGH_VOLUME = "https://earthengine-highvolume.googleapis.com"
+
+
 def init_earth_engine() -> None:
-    """Inicializa o EE uma única vez. Lança RuntimeError com mensagem clara
-    se faltar configuração."""
+    """Inicializa o EE uma única vez. Suporta dois modos de autenticação:
+
+    1. **Service account** (produção) — se EE_SERVICE_ACCOUNT_EMAIL + chave
+       estiverem configurados.
+    2. **Credenciais de usuário** (dev local) — se não houver service account,
+       usa as credenciais armazenadas por `earthengine authenticate`
+       (conta Google logada). Mais simples para começar.
+
+    Em ambos os casos EE_PROJECT é obrigatório (novo API do Earth Engine).
+    Lança RuntimeError com mensagem clara se faltar configuração.
+    """
     global _initialized
     if _initialized:
         return
@@ -30,21 +42,33 @@ def init_earth_engine() -> None:
             "EE_PROJECT não definido. Configure o id do projeto Google Cloud "
             "habilitado para Earth Engine (veja backend/README.md)."
         )
-    if not s.ee_service_account_email:
-        raise RuntimeError("EE_SERVICE_ACCOUNT_EMAIL não definido.")
 
-    key_file = _resolve_key_file(s)
-    if not key_file:
+    # Modo 1: service account (se um e-mail foi informado).
+    if s.ee_service_account_email:
+        key_file = _resolve_key_file(s)
+        if not key_file:
+            raise RuntimeError(
+                "EE_SERVICE_ACCOUNT_EMAIL definido, mas nenhuma chave encontrada. "
+                "Defina EE_SERVICE_ACCOUNT_KEY_FILE (caminho) ou "
+                "EE_SERVICE_ACCOUNT_KEY_JSON (conteúdo JSON)."
+            )
+        credentials = ee.ServiceAccountCredentials(s.ee_service_account_email, key_file)
+        ee.Initialize(credentials, project=s.ee_project, opt_url=HIGH_VOLUME)
+        _initialized = True
+        logger.info("Earth Engine inicializado (service account) no projeto %s", s.ee_project)
+        return
+
+    # Modo 2: credenciais de usuário armazenadas (earthengine authenticate).
+    try:
+        ee.Initialize(project=s.ee_project, opt_url=HIGH_VOLUME)
+    except Exception as exc:  # noqa: BLE001
         raise RuntimeError(
-            "Nenhuma chave da service account encontrada. Defina "
-            "EE_SERVICE_ACCOUNT_KEY_FILE (caminho) ou EE_SERVICE_ACCOUNT_KEY_JSON "
-            "(conteúdo JSON)."
+            "Falha ao inicializar com credenciais de usuário. Rode "
+            "`earthengine authenticate` uma vez (ou configure uma service "
+            f"account). Detalhe: {exc}"
         )
-
-    credentials = ee.ServiceAccountCredentials(s.ee_service_account_email, key_file)
-    ee.Initialize(credentials, project=s.ee_project, opt_url="https://earthengine-highvolume.googleapis.com")
     _initialized = True
-    logger.info("Earth Engine inicializado no projeto %s", s.ee_project)
+    logger.info("Earth Engine inicializado (credenciais de usuário) no projeto %s", s.ee_project)
 
 
 def _resolve_key_file(s) -> str | None:

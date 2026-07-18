@@ -43,6 +43,23 @@ Google Earth Engine  ──►  Copernicus Sentinel-2 (S2_SR_HARMONIZED)
 
 ## 3. Configuração do Google Earth Engine (uma vez)
 
+O backend suporta **dois modos de autenticação**:
+
+- **Modo simples (dev local)** — usa a sua conta Google via
+  `earthengine authenticate`. Não precisa de service account nem chave JSON.
+  Ideal para rodar na sua máquina. Passos:
+  1. Tenha um **projeto Google Cloud** com a **Earth Engine API ativada** e o
+     projeto **registrado** no Earth Engine (veja 3.2–3.4 abaixo).
+  2. Rode uma vez: `.venv\Scripts\earthengine authenticate` (abre o navegador).
+  3. No `.env`, defina apenas `EE_PROJECT=seu-project-id` e deixe
+     `EE_SERVICE_ACCOUNT_EMAIL` **vazio**.
+
+- **Modo service account (produção)** — para deploy sem interação humana.
+  Siga os passos 3.5 abaixo (criar service account + chave JSON).
+
+Em ambos, `EE_PROJECT` é obrigatório. Detalhamento:
+
+
 1. **Registrar-se no Earth Engine**: https://earthengine.google.com/ → *Sign up*
    (escolha uso *não comercial* se aplicável). Aguarde a aprovação.
 2. **Criar/escolher um projeto no Google Cloud**: https://console.cloud.google.com/
