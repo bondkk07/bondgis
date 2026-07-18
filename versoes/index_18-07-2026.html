@@ -362,17 +362,13 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 7 9 3 3 9l4 4M17 11l4 4-6 6-4-4"/><path d="m8 12 4 4M16 8l2-2M19 5l1-1"/><path d="M9 21H3v-6"/></svg>
         <span>Satélite</span>
       </button>
-      <button data-tab="auditoria" title="Auditoria CAR">
+      <button data-tab="analisar" title="Analisar Área">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-        <span>Auditoria</span>
+        <span>Analisar</span>
       </button>
       <button data-tab="camadas" title="Camadas">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
         <span>Camadas</span>
-      </button>
-      <button data-tab="relatorio" title="Relatório">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
-        <span>Relatório</span>
       </button>
     </nav>
 
@@ -462,6 +458,10 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
       <progress id="prog-mb" value="0" max="100" style="display:none"></progress>
       <div class="log" id="log-mb"></div>
       <div id="res-mapbiomas"></div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn mini sec" id="btn-rel-temporal">Extrato Temporal (HTML)</button>
+        <button class="btn mini sec" id="btn-rel-csv">Exportar CSV</button>
+      </div>
     </section>
 
     <!-- ══ ABA: SATÉLITE (Sentinel-2 via Earth Engine) ════ -->
@@ -509,48 +509,56 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
       <input type="range" id="rng-sat-nuvem" min="0" max="100" value="60"
              style="width:100%;accent-color:var(--accent)">
 
-      <div style="display:flex;gap:8px;margin-top:14px">
-        <button class="btn" id="btn-sat-visualizar">Visualizar no mapa</button>
-        <button class="btn sec" id="btn-sat-stats">Calcular estatísticas</button>
-      </div>
+      <button class="btn" id="btn-sat-visualizar" style="margin-top:14px">Visualizar no mapa</button>
       <div style="display:flex;gap:6px;margin-top:6px">
         <button class="btn mini sec" id="btn-sat-datas">Datas disponíveis</button>
         <button class="btn mini sec" id="btn-sat-serie">Série temporal (NDVI)</button>
       </div>
-      <p class="hint">Requer o backend Earth Engine em execução (veja
-        <b>backend/README.md</b>). Configure a URL do backend em ⚙ Configurações.
-        O processamento é feito no servidor; o mapa recebe apenas os tiles.</p>
+      <p class="hint">Visualização de camadas espectrais no mapa. Para estatísticas,
+        classificação e conformidade use a aba <b>Analisar</b>. Requer o backend
+        (⚙ Configurações); o processamento é no servidor, o mapa recebe apenas tiles.</p>
 
       <progress id="prog-sat" value="0" max="100" style="display:none"></progress>
       <div class="log" id="log-sat"></div>
       <div id="res-satelite"></div>
     </section>
 
-    <!-- ══ ABA: AUDITORIA CAR ═════════════════════════════ -->
-    <section class="painel" id="tab-auditoria">
-      <h3>Auditoria CAR × Sentinel-2 × MapBiomas</h3>
-      <p class="hint">Cruza as camadas do CAR com a cobertura observada pelo Sentinel-2,
-        validada pelo MapBiomas, detecta divergências e gera indicadores de conformidade.
-        Requer o backend Earth Engine (⚙ Configurações).</p>
+    <!-- ══ ABA: ANALISAR ÁREA (fluxo único de análise) ════ -->
+    <section class="painel" id="tab-analisar">
+      <h3>Analisar Área</h3>
+      <p class="hint">Fluxo único: selecione a área, escolha o tipo de análise e processe.
+        Todos os tipos usam o mesmo pipeline (Sentinel-2 + MapBiomas + camadas do CAR),
+        mudando apenas os módulos executados. Requer o backend (⚙ Configurações).</p>
 
-      <label>Limite do imóvel</label>
-      <select id="sel-aud-imovel"></select>
+      <label>Área (limite do imóvel / CAR)</label>
+      <select id="sel-ana-imovel"></select>
 
-      <div id="aud-camadas-detectadas" class="log" style="margin-top:8px"></div>
+      <label style="margin-top:10px">Tipo de análise</label>
+      <select id="sel-ana-tipo">
+        <option value="completa" selected>Análise Ambiental Completa</option>
+        <option value="auditoria">Auditoria Ambiental</option>
+        <option value="vegetacao">Análise de Vegetação</option>
+        <option value="supressao">Supressão de Vegetação</option>
+        <option value="conformidade">Conformidade Ambiental</option>
+        <option value="temporal">Comparativo Temporal</option>
+        <option value="recuperacao">Recuperação Ambiental</option>
+      </select>
+
+      <div id="ana-camadas-detectadas" class="log" style="margin-top:8px"></div>
 
       <div style="display:flex;gap:8px;margin-top:6px">
-        <div style="flex:1"><label>Data inicial</label><input type="date" id="inp-aud-inicio"></div>
-        <div style="flex:1"><label>Data final</label><input type="date" id="inp-aud-fim"></div>
+        <div style="flex:1"><label>Data inicial</label><input type="date" id="inp-ana-inicio"></div>
+        <div style="flex:1"><label>Data final</label><input type="date" id="inp-ana-fim"></div>
       </div>
-      <label>Nuvens máximas: <b id="lbl-aud-nuvem">40</b>%</label>
-      <input type="range" id="rng-aud-nuvem" min="0" max="100" value="40"
+      <label>Nuvens máximas: <b id="lbl-ana-nuvem">40</b>%</label>
+      <input type="range" id="rng-ana-nuvem" min="0" max="100" value="40"
              style="width:100%;accent-color:var(--accent)">
 
-      <button class="btn" id="btn-auditoria" style="margin-top:12px">Executar Auditoria</button>
-      <progress id="prog-aud" value="0" max="100" style="display:none"></progress>
-      <div class="log" id="log-aud"></div>
+      <button class="btn" id="btn-analisar" style="margin-top:12px">Analisar Área</button>
+      <progress id="prog-ana" value="0" max="100" style="display:none"></progress>
+      <div class="log" id="log-ana"></div>
 
-      <div id="res-auditoria"></div>
+      <div id="res-analise"></div>
     </section>
 
     <!-- ══ ABA: CAMADAS ═══════════════════════════════════ -->
@@ -570,24 +578,10 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
       <progress id="prog-sobrep" value="0" max="100" style="display:none"></progress>
       <div class="log" id="log-sobrep"></div>
       <div id="res-sobrep" style="margin-top:10px"></div>
-    </section>
-
-    <!-- ══ ABA: RELATÓRIO ═════════════════════════════════ -->
-    <section class="painel" id="tab-relatorio">
-      <h3>Extratos e relatórios</h3>
-      <label>Camada do imóvel (referência de área)</label>
-      <select id="sel-rel-imovel"></select>
-
-      <button class="btn" id="btn-rel-ambiental">Extrato Ambiental (camadas × área)</button>
-      <p class="hint">Tabela com a área (ha) e o % de cada camada vetorial em relação ao imóvel.</p>
-
-      <button class="btn" id="btn-rel-temporal">Extrato Temporal MapBiomas</button>
-      <button class="btn sec" id="btn-rel-csv">Exportar CSV temporal</button>
-      <p class="hint">Requer uma análise MapBiomas executada na aba correspondente.</p>
-
-      <button class="btn" id="btn-rel-sobrep">Relatório de Sobreposição</button>
-      <p class="hint">Requer a verificação de sobreposição executada na aba Camadas.
-        Inclui a seção MapBiomas se houver análise disponível.</p>
+      <button class="btn sec" id="btn-rel-sobrep" style="margin-top:6px">Relatório de Sobreposição</button>
+      <button class="btn sec" id="btn-rel-ambiental">Extrato de áreas das camadas</button>
+      <p class="hint">O relatório de sobreposição usa a verificação acima; o extrato lista a
+        área (ha) e o % de cada camada vetorial em relação ao imóvel selecionado.</p>
     </section>
     </div>
   </aside>
@@ -874,8 +868,7 @@ const state = {
   codigoCar: '',
   resultadoMapBiomas: null,
   resultadoSobrep: null,
-  resultadoSatelite: null,
-  resultadoAuditoria: null,
+  resultadoAnalise: null,
 };
 let cfg = {
   proxy: localStorage.getItem('lyssa_proxy') || '',
@@ -1020,7 +1013,7 @@ function atualizarUICamadas(){
     return sorted.map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('')
       || '<option value="">— nenhuma camada vetorial —</option>';
   };
-  for(const id of ['sel-sobrep-imovel','sel-rel-imovel','sel-mb-camada','sel-sat-camada','sel-aud-imovel'])
+  for(const id of ['sel-sobrep-imovel','sel-mb-camada','sel-sat-camada','sel-ana-imovel'])
     $(id).innerHTML = opts('IMÓVEL');
   if(typeof detectarCamadasCAR === 'function') detectarCamadasCAR();
 }
@@ -1752,7 +1745,7 @@ function abrirRelatorio(html){
   });
 }
 function relExtratoAmbiental(){
-  const camId = Number($('sel-rel-imovel').value);
+  const camId = Number($('sel-sobrep-imovel').value);
   const imovel = state.registro.find(c => c.id === camId);
   if(!imovel){ toast('Selecione a camada do imóvel.', 'warn'); return; }
   const areaImovel = calcularAreaHa(imovel.geojson);
@@ -2229,44 +2222,6 @@ function renderLegendaSat(legend){
        <span class="dot" style="background:${l.color}"></span>${esc(l.label)}</div>`).join('');
 }
 
-async function satEstatisticas(){
-  let p; try{ p = satParamsBase(); }catch(e){ logTo('log-sat', `✖ ${e.message}`, true); return; }
-  const btn = $('btn-sat-stats'), prog = $('prog-sat');
-  btn.disabled = true; prog.style.display = 'block'; prog.removeAttribute('value');
-  logTo('log-sat', 'Calculando estatísticas da área no servidor…', true);
-  try{
-    const r = await apiPost('/api/stats', {
-      aoi:p.aoi, date_start:p.date_start, date_end:p.date_end,
-      max_cloud:p.max_cloud, mode:p.mode,
-    });
-    state.resultadoSatelite = {...r, camNome: p.cam.nome};
-    renderEstatisticasSat(r);
-    logTo('log-sat', `✔ Estatísticas calculadas (${r.n_images} imagem(ns)).`);
-  } catch(e){ logTo('log-sat', `✖ ${e.message}`); }
-  finally { btn.disabled = false; prog.style.display = 'none'; }
-}
-
-function renderEstatisticasSat(r){
-  const box = $('res-satelite');
-  const linhas = (r.classes||[]).map(c => `<tr>
-    <td><span class="dot" style="background:${c.cor}"></span>${esc(c.classe)}</td>
-    <td style="text-align:right">${c.area_ha.toFixed(2)}</td>
-    <td style="text-align:right">${c.pct.toFixed(1)}%</td></tr>`).join('');
-  const idx = r.indices || {};
-  const idxLinhas = Object.entries(idx).map(([k,v]) =>
-    `<tr><td>${esc(k)}</td><td style="text-align:right" colspan="2">${v==null?'–':v.toFixed(3)}</td></tr>`).join('');
-  box.innerHTML = `
-    <p class="hint" style="margin-top:10px">Área total: <b>${r.area_total_ha.toFixed(2)} ha</b>
-      ${r.image_date ? '· Imagem: '+esc(r.image_date) : ''} · ${r.n_images} imagem(ns)</p>
-    <h3>Classificação automática</h3>
-    <table class="res"><thead><tr><th>Classe</th><th style="text-align:right">ha</th>
-      <th style="text-align:right">%</th></tr></thead><tbody>${linhas || '<tr><td colspan="3">—</td></tr>'}</tbody></table>
-    <h3>Índices médios na área</h3>
-    <table class="res"><thead><tr><th>Índice</th><th style="text-align:right" colspan="2">Média</th></tr></thead>
-      <tbody>${idxLinhas}</tbody></table>
-    <button class="btn sec" style="margin-top:12px" onclick="relSatelite()">Abrir relatório</button>`;
-}
-
 async function satDatas(){
   let p; try{ p = satParamsBase(); }catch(e){ logTo('log-sat', `✖ ${e.message}`, true); return; }
   logTo('log-sat', 'Buscando datas disponíveis…', true);
@@ -2300,49 +2255,6 @@ async function satSerie(){
   finally { prog.style.display = 'none'; }
 }
 
-function relSatelite(){
-  const r = state.resultadoSatelite;
-  if(!r){ toast('Calcule as estatísticas primeiro.', 'warn'); return; }
-  const classes = (r.classes||[]).map(c => `<tr>
-    <td><span style="background:${c.cor};display:inline-block;width:12px;height:12px;margin-right:6px;border-radius:2px;vertical-align:middle"></span>${esc(c.classe)}</td>
-    <td style="text-align:right">${c.area_ha.toFixed(2)}</td>
-    <td style="text-align:right">${c.pct.toFixed(1)}%</td></tr>`).join('');
-  const rs = r.resumo || {};
-  abrirRelatorio(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
-<title>Análise Sentinel-2 – BondGis</title><style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:"Segoe UI",Arial,sans-serif;background:#f4f6f8;color:#1a2530}
-  .header{background:#0a2b36;color:#fff;padding:24px 32px 20px}
-  .header .tag{background:#00b894;color:#fff;font-size:.72em;padding:3px 10px;border-radius:12px;letter-spacing:1px;text-transform:uppercase}
-  .header h1{font-size:1.5em;margin:8px 0 4px}.header .sub{color:#a8d5c2;font-size:.9em}
-  .content{max-width:900px;margin:0 auto;padding:24px 16px 40px}
-  .cards{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap}
-  .card{background:#fff;border-radius:8px;padding:14px 18px;min-width:150px;box-shadow:0 1px 4px rgba(0,0,0,.08);flex:1}
-  .card .n{font-size:1.5em;font-weight:700;color:#0a2b36}.card .l{font-size:.78em;color:#666;margin-top:4px}
-  table{border-collapse:collapse;width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-top:8px}
-  th{background:#1a7f4b;color:#fff;padding:10px 14px;text-align:left;font-size:.85em}
-  td{border-bottom:1px solid #eee;padding:9px 14px;font-size:.87em}
-  .footer{text-align:center;margin-top:28px;font-size:.8em;color:#999}
-</style></head><body>
-<div class="header"><div class="tag">Sentinel-2</div>
-  <h1>Análise de Cobertura por Satélite</h1>
-  <div class="sub">${esc(r.camNome||'Propriedade')} ${r.image_date ? '· Imagem '+esc(r.image_date) : ''} · Fonte: Copernicus Sentinel-2 / Google Earth Engine</div></div>
-<div class="content">
-  <div class="cards">
-    <div class="card"><div class="n">${(rs.area_total_ha||0).toFixed(1)}</div><div class="l">Área total (ha)</div></div>
-    <div class="card"><div class="n">${(rs.vegetacao_ha||0).toFixed(1)}</div><div class="l">Vegetação (ha)</div></div>
-    <div class="card"><div class="n">${(rs.floresta_ha||0).toFixed(1)}</div><div class="l">Floresta (ha)</div></div>
-    <div class="card"><div class="n">${(rs.agricultura_ha||0).toFixed(1)}</div><div class="l">Agricultura (ha)</div></div>
-    <div class="card"><div class="n">${(rs.agua_ha||0).toFixed(1)}</div><div class="l">Água (ha)</div></div>
-    <div class="card"><div class="n">${(rs.solo_exposto_ha||0).toFixed(1)}</div><div class="l">Solo exposto (ha)</div></div>
-  </div>
-  <h2 style="color:#1a7f4b;margin-bottom:6px">Classificação automática por classe</h2>
-  <table><thead><tr><th>Classe</th><th style="text-align:right">Área (ha)</th><th style="text-align:right">%</th></tr></thead>
-    <tbody>${classes}</tbody></table>
-  <p class="footer">Gerado por BondGis · Classificação preliminar por índices espectrais · ${esc(agora())}</p>
-</div></body></html>`);
-}
-
 /* Carrega propriedade de arquivo GeoJSON/KML na aba Satélite. */
 function carregarArquivoSatelite(file){
   const nome = file.name.replace(/\.[^.]+$/, '');
@@ -2369,15 +2281,23 @@ function carregarArquivoSatelite(file){
   reader.readAsText(file);
 }
 
-/* ══ AUDITORIA CAR — cruzamento CAR × Sentinel-2 × MapBiomas ════════════
-   Detecta as sub-camadas do CAR já carregadas (por grupo/nome), envia ao
-   backend junto com o limite do imóvel e renderiza o painel executivo, a
-   tabela de divergências, a camada Leaflet e os relatórios. */
-const AUD_CAR_MAP = {
+/* ══ ANALISAR ÁREA — fluxo único de análise ═════════════════════════════
+   Selecionar área → tipo de análise → processar → resultado. O backend
+   (/api/analise) roda o pipeline compartilhado; aqui só coletamos as
+   camadas do CAR, enviamos e renderizamos os módulos retornados. */
+const CAR_CAMADAS_MAP = {
   app:              c => c.grupo === 'APP',
   reserva_legal:    c => c.grupo === 'RESERVA_LEGAL',
-  vegetacao_nativa: c => c.grupo === 'VEGETACAO_NATIVA',
-  uso_consolidado:  c => /CONSOLIDAD/i.test(c.nome),
+  vegetacao_nativa: c => c.grupo === 'VEGETACAO_NATIVA' || /REMANESCENTE/i.test(c.nome),
+  area_consolidada: c => /CONSOLIDAD/i.test(c.nome),
+  servidao:         c => /SERVID/i.test(c.nome),
+  uso_restrito:     c => c.grupo === 'USO_RESTRITO',
+  hidrografia:      c => c.grupo === 'HIDROGRAFIA',
+};
+const CAR_CAMADAS_ROTULOS = {
+  app:'APP', reserva_legal:'Reserva Legal', vegetacao_nativa:'Vegetação Nativa / Remanescentes',
+  area_consolidada:'Área Consolidada', servidao:'Servidão Administrativa',
+  uso_restrito:'Uso Restrito', hidrografia:'Hidrografia',
 };
 
 // Junta as feições de todas as camadas que casam num FeatureCollection.
@@ -2388,117 +2308,165 @@ function _fcDe(camadas){
 }
 
 function detectarCamadasCAR(){
-  const el = $('aud-camadas-detectadas');
+  const el = $('ana-camadas-detectadas');
   if(!el) return {};
   const vets = camadasVetoriais();
   const det = {};
-  const rotulos = {app:'APP', reserva_legal:'Reserva Legal',
-    uso_consolidado:'Uso Consolidado', vegetacao_nativa:'Vegetação Nativa'};
   const linhas = [];
-  for(const [chave, teste] of Object.entries(AUD_CAR_MAP)){
+  for(const [chave, teste] of Object.entries(CAR_CAMADAS_MAP)){
     const achadas = vets.filter(teste);
     det[chave] = _fcDe(achadas);
-    linhas.push(`${det[chave] ? '✔' : '—'} ${rotulos[chave]}: ${achadas.length ? achadas.map(c=>esc(c.nome)).join(', ') : 'não encontrada'}`);
+    linhas.push(`${det[chave] ? '✔' : '—'} ${CAR_CAMADAS_ROTULOS[chave]}: ` +
+      (achadas.length ? achadas.map(c=>esc(c.nome)).join(', ') : 'não encontrada'));
   }
   el.innerHTML = '<b>Camadas do CAR detectadas:</b><br>' + linhas.join('<br>');
   return det;
 }
 
-async function executarAuditoria(){
-  const camId = Number($('sel-aud-imovel').value);
+async function executarAnalise(){
+  const camId = Number($('sel-ana-imovel').value);
   const cam = state.registro.find(c => c.id === camId);
-  if(!cam){ logTo('log-aud', '✖ Selecione o limite do imóvel.', true); return; }
+  if(!cam){ logTo('log-ana', '✖ Selecione a área (limite do imóvel).', true); return; }
   const imovel = unirFeatures(featuresPoligonais(cam.geojson));
-  if(!imovel){ logTo('log-aud', '✖ A camada do imóvel não contém polígonos.', true); return; }
-  const inicio = $('inp-aud-inicio').value, fim = $('inp-aud-fim').value;
-  if(!inicio || !fim || inicio > fim){ logTo('log-aud', '✖ Verifique as datas.', true); return; }
+  if(!imovel){ logTo('log-ana', '✖ A camada selecionada não contém polígonos.', true); return; }
+  const inicio = $('inp-ana-inicio').value, fim = $('inp-ana-fim').value;
+  if(!inicio || !fim || inicio > fim){ logTo('log-ana', '✖ Verifique as datas.', true); return; }
+  const tipo = $('sel-ana-tipo').value;
 
-  const camadas = detectarCamadasCAR();
-  const btn = $('btn-auditoria'), prog = $('prog-aud');
+  const btn = $('btn-analisar'), prog = $('prog-ana');
   btn.disabled = true; prog.style.display = 'block'; prog.removeAttribute('value');
-  logTo('log-aud', 'Executando auditoria no servidor (pode levar até ~1 min)…', true);
+  logTo('log-ana', `Processando "${$('sel-ana-tipo').selectedOptions[0].text}" no servidor…`, true);
   try{
-    const r = await apiPost('/api/auditoria', {
-      aoi: imovel, camadas,
+    const r = await apiPost('/api/analise', {
+      aoi: imovel, tipo, camadas: detectarCamadasCAR(),
       date_start: inicio, date_end: fim,
-      max_cloud: Number($('rng-aud-nuvem').value), mode: 'median',
-    }, 180000);
-    state.resultadoAuditoria = {...r, imovelNome: cam.nome, imovelGeojson: imovel};
+      max_cloud: Number($('rng-ana-nuvem').value), mode: 'median',
+    }, 300000);
+    state.resultadoAnalise = {...r, imovelNome: cam.nome};
     desenharCamadaDivergencias(r.geojson_divergencias);
-    renderAuditoria(r);
-    logTo('log-aud', `✔ Auditoria concluída · grau: ${r.grau_conformidade}.`);
-  } catch(e){ logTo('log-aud', `✖ ${e.message}`); }
+    renderAnalise(r);
+    logTo('log-ana', '✔ Análise concluída.');
+  } catch(e){ logTo('log-ana', `✖ ${e.message}`); }
   finally { btn.disabled = false; prog.style.display = 'none'; }
 }
 
-// Camada Leaflet das divergências (verde/amarelo/laranja/vermelho).
+// Camada Leaflet das divergências (cor por cruzamento de origem).
 function desenharCamadaDivergencias(geojson){
-  const anterior = state.registro.find(c => c.nome === 'Auditoria — divergências' && c.tipo === 'vector');
+  const anterior = state.registro.find(c => c.nome === 'Análise — divergências' && c.tipo === 'vector');
   if(anterior) removerCamada(anterior.id);
   if(!geojson || !geojson.features?.length) return;
   const layer = L.geoJSON(geojson, {
-    style: f => ({color: f.properties.cor || '#f2c744', weight:1,
-      fillColor: f.properties.cor || '#f2c744', fillOpacity:.5}),
-    onEachFeature: (f, l) => l.bindPopup(`<b>${esc(f.properties.rotulo||'Divergência')}</b>`),
+    style: f => ({color: f.properties.cor || '#e8842c', weight:1,
+      fillColor: f.properties.cor || '#e8842c', fillOpacity:.5}),
+    onEachFeature: (f, l) => l.bindPopup(`<b>${esc(f.properties.titulo||'Divergência')}</b>`),
   }).addTo(map);
-  const item = {id:++state.seq, nome:'Auditoria — divergências', grupo:'AUDITORIA',
+  const item = {id:++state.seq, nome:'Análise — divergências', grupo:'ANALISE',
     tipo:'vector', geojson, leafletLayer:layer, visivel:true, cor:'#e8842c'};
   state.registro.push(item);
   atualizarUICamadas();
 }
 
-const GRAU_COR = {
-  'Conforme':'#1a9850', 'Atenção':'#f2c744',
-  'Divergência moderada':'#e8842c', 'Divergência crítica':'#d7301f',
-};
 function corScore(v){
   if(v == null) return 'var(--text-tertiary)';
-  if(v >= 85) return '#1a9850';
+  if(v >= 90) return '#1a9850';
   if(v >= 70) return '#f2c744';
   if(v >= 50) return '#e8842c';
   return '#d7301f';
 }
-const SEV_COR = {2:'#f2c744', 3:'#e8842c', 4:'#d7301f', 1:'#1a9850'};
 
-function renderAuditoria(r){
-  const s = r.scores;
-  const card = (label, v) => {
-    const cor = corScore(v);
-    const txt = v == null ? 'N/D' : v.toFixed(0);
-    const w = v == null ? 0 : Math.max(0, Math.min(100, v));
-    return `<div class="score-card"><div class="l">${label}</div>
-      <div class="v" style="color:${cor}">${txt}</div>
-      <div class="score-bar"><i style="width:${w}%;background:${cor}"></i></div></div>`;
-  };
-  const divs = [...r.divergencias].sort((a,b) => b.severidade - a.severidade || b.pct - a.pct)
-    .map(d => `<div class="aud-div-item">
-      <span class="sev" style="background:${SEV_COR[d.severidade]||'#999'}"></span>
-      <span class="nome">${esc(d.tipo)}${d.aplicavel ? '' : ' <span style="color:var(--text-tertiary)">(N/A)</span>'}</span>
-      <span class="val">${d.area_ha.toFixed(1)} ha · ${d.pct.toFixed(1)}%</span></div>`).join('');
+function renderAnalise(r){
+  const m = r.modulos || {};
+  let html = `<p class="hint" style="margin-top:12px">
+    ${r.n_images} imagem(ns) Sentinel-2${r.image_date ? ' · imagem '+esc(r.image_date) : ''} ·
+    MapBiomas ${r.mapbiomas_ano} (hist. ${r.mapbiomas_ano_historico}) ·
+    área ${r.area_total_ha.toFixed(1)} ha</p>`;
 
-  $('res-auditoria').innerHTML = `
-    <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
-      <span class="grau-badge" style="background:${GRAU_COR[r.grau_conformidade]||'#999'}">${esc(r.grau_conformidade)}</span>
-      <span class="hint" style="margin:0">Índice Geral de Conformidade:
-        <b style="color:${corScore(s.indice_geral)};font-size:15px">${s.indice_geral?.toFixed(0) ?? '—'}</b>/100</span>
+  // ── Score de conformidade (auditoria/conformidade/completa) ──
+  if(m.score){
+    const s = m.score;
+    const cor = corScore(s.valor);
+    html += `
+    <div style="display:flex;align-items:center;gap:10px;margin-top:6px">
+      <span class="grau-badge" style="background:${cor}">${esc(s.classificacao)}</span>
+      <span class="hint" style="margin:0">Score de conformidade:
+        <b style="color:${cor};font-size:15px">${s.valor == null ? '—' : s.valor.toFixed(1)}</b>/100</span>
     </div>
-    <div class="score-grid">
-      ${card('Score Ambiental', s.ambiental)}
-      ${card('Score CAR', s.car)}
-      ${card('Score Vegetação', s.vegetacao)}
-      ${card('Score APP', s.app)}
-      ${card('Score Reserva Legal', s.reserva_legal)}
-      ${card('Índice Geral', s.indice_geral)}
-    </div>
-    <h3>Divergências detectadas</h3>
-    <p class="hint" style="margin-top:0">Imagem ${r.image_date ? esc(r.image_date) : ''} ·
-      ${r.n_images} imagem(ns) · MapBiomas ${r.mapbiomas_ano} · área ${r.area_total_ha.toFixed(1)} ha</p>
-    ${divs}
-    <div class="aud-export">
-      <button class="btn sec" onclick="relAuditoria()">Relatório HTML / PDF</button>
-      <button class="btn sec" onclick="baixarAuditoriaJson()">JSON</button>
-      <button class="btn sec" onclick="baixarDivergenciasGeojson()">GeoJSON</button>
-    </div>`;
+    <p class="hint">${esc(s.formula)}</p>`;
+  }
+
+  // ── Cruzamentos com justificativa ──
+  if(m.cruzamentos){
+    html += `<h3>Cruzamentos espaciais</h3>`;
+    for(const c of m.cruzamentos){
+      if(!c.aplicavel){
+        html += `<div class="aud-div-item"><span class="sev" style="background:var(--text-tertiary)"></span>
+          <span class="nome">${esc(c.titulo)} <span style="color:var(--text-tertiary)">(N/A — camada não fornecida)</span></span></div>`;
+        continue;
+      }
+      const cor = corScore(c.pct_conformidade);
+      html += `<div class="aud-div-item" style="flex-wrap:wrap">
+        <span class="sev" style="background:${cor}"></span>
+        <span class="nome"><b>${esc(c.titulo)}</b></span>
+        <span class="val">${c.pct_conformidade.toFixed(1)}% conforme</span>
+        <div style="flex-basis:100%;font-size:11.5px;color:var(--text-secondary);padding-left:17px">
+          Avaliada: ${c.area_avaliada_ha.toFixed(1)} ha · Conforme: ${c.area_conforme_ha.toFixed(1)} ha ·
+          Divergente: <b>${c.area_divergente_ha.toFixed(1)} ha</b><br>${esc(c.justificativa)}
+          ${c.validacao_mapbiomas_pct != null ? `<br>Validação MapBiomas: ${c.validacao_mapbiomas_pct}% · RL = ${c.percentual_rl_sobre_imovel}% do imóvel` : ''}
+        </div></div>`;
+    }
+  }
+
+  // ── Composição de uso ──
+  if(m.composicao){
+    const comp = m.composicao.por_camada.imovel || [];
+    html += `<h3>Composição de uso (Sentinel-2)</h3>
+      ${m.composicao.ndvi_medio != null ? `<p class="hint" style="margin-top:0">NDVI médio do imóvel: <b>${m.composicao.ndvi_medio.toFixed(3)}</b></p>` : ''}
+      <table class="res"><thead><tr><th>Classe</th><th style="text-align:right">ha</th>
+      <th style="text-align:right">%</th></tr></thead><tbody>` +
+      comp.sort((a,b)=>b.area_ha-a.area_ha).map(c => `<tr>
+        <td><span class="dot" style="background:${c.cor}"></span>${esc(c.classe)}</td>
+        <td style="text-align:right">${c.area_ha.toFixed(2)}</td>
+        <td style="text-align:right">${c.pct.toFixed(1)}%</td></tr>`).join('') +
+      `</tbody></table>`;
+  }
+
+  // ── Supressão / Recuperação ──
+  if(m.supressao){
+    const su = m.supressao;
+    html += `<h3>Supressão de vegetação</h3>
+      <div class="score-grid">
+        <div class="score-card"><div class="l">Nativa em ${su.ano_referencia}</div><div class="v">${su.nativa_historica_ha.toFixed(1)} ha</div></div>
+        <div class="score-card"><div class="l">Suprimida desde então</div><div class="v" style="color:${su.pct_suprimida>5?'#d7301f':'#1a9850'}">${su.suprimida_ha.toFixed(1)} ha (${su.pct_suprimida}%)</div></div>
+      </div><p class="hint">${esc(su.justificativa)}</p>`;
+  }
+  if(m.recuperacao){
+    const re = m.recuperacao;
+    html += `<h3>Recuperação ambiental</h3>
+      <div class="score-grid">
+        <div class="score-card"><div class="l">Antrópica em ${re.ano_referencia}</div><div class="v">${re.antropica_historica_ha.toFixed(1)} ha</div></div>
+        <div class="score-card"><div class="l">Regenerada</div><div class="v" style="color:#1a9850">${re.regenerada_ha.toFixed(1)} ha (${re.pct_regenerada}%)</div></div>
+      </div><p class="hint">${esc(re.justificativa)}</p>`;
+  }
+
+  // ── Comparativo temporal ──
+  if(m.temporal){
+    const anos = Object.keys(m.temporal.anos).sort();
+    html += `<h3>Comparativo temporal (MapBiomas)</h3>
+      <table class="res"><thead><tr><th>Ano</th><th style="text-align:right">Nativa (ha)</th>
+      <th style="text-align:right">Antrópica (ha)</th><th style="text-align:right">Água (ha)</th></tr></thead><tbody>` +
+      anos.map(a => { const v = m.temporal.anos[a]; return `<tr><td>${a}</td>
+        <td style="text-align:right">${v.nativa_ha.toFixed(1)}</td>
+        <td style="text-align:right">${v.antropica_ha.toFixed(1)}</td>
+        <td style="text-align:right">${v.agua_ha.toFixed(1)}</td></tr>`; }).join('') +
+      `</tbody></table>`;
+  }
+
+  html += `<div class="aud-export">
+    <button class="btn sec" onclick="relAnalise()">Relatório HTML / PDF</button>
+    <button class="btn sec" onclick="baixarAnaliseJson()">JSON</button>
+    <button class="btn sec" onclick="baixarDivergenciasGeojson()">GeoJSON</button>
+  </div>`;
+  $('res-analise').innerHTML = html;
 }
 
 function baixarBlob(conteudo, nome, mime){
@@ -2509,81 +2477,111 @@ function baixarBlob(conteudo, nome, mime){
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 20000);
 }
-function baixarAuditoriaJson(){
-  const r = state.resultadoAuditoria;
-  if(!r){ toast('Execute a auditoria primeiro.', 'warn'); return; }
-  const {imovelGeojson, ...limpo} = r;
-  baixarBlob(JSON.stringify(limpo, null, 2), 'auditoria_car.json', 'application/json');
+function baixarAnaliseJson(){
+  const r = state.resultadoAnalise;
+  if(!r){ toast('Execute a análise primeiro.', 'warn'); return; }
+  baixarBlob(JSON.stringify(r, null, 2), `analise_${r.tipo}.json`, 'application/json');
 }
 function baixarDivergenciasGeojson(){
-  const r = state.resultadoAuditoria;
-  if(!r?.geojson_divergencias){ toast('Execute a auditoria primeiro.', 'warn'); return; }
-  baixarBlob(JSON.stringify(r.geojson_divergencias), 'auditoria_divergencias.geojson', 'application/geo+json');
+  const r = state.resultadoAnalise;
+  if(!r?.geojson_divergencias?.features?.length){ toast('Sem divergências para exportar.', 'warn'); return; }
+  baixarBlob(JSON.stringify(r.geojson_divergencias), 'analise_divergencias.geojson', 'application/geo+json');
 }
 
-function relAuditoria(){
-  const r = state.resultadoAuditoria;
-  if(!r){ toast('Execute a auditoria primeiro.', 'warn'); return; }
-  const s = r.scores;
-  const scoreCard = (label, v) => {
-    const cor = v==null?'#999':(v>=85?'#1a9850':v>=70?'#f2c744':v>=50?'#e8842c':'#d7301f');
-    return `<div class="sc"><div class="l">${label}</div><div class="v" style="color:${cor}">${v==null?'N/D':v.toFixed(0)}</div></div>`;
-  };
-  const divRows = [...r.divergencias].sort((a,b)=>b.severidade-a.severidade).map(d => `<tr>
-    <td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${SEV_COR[d.severidade]||'#999'};margin-right:6px"></span>${esc(d.tipo)}</td>
-    <td style="text-align:right">${d.area_ha.toFixed(2)}</td>
-    <td style="text-align:right">${d.pct.toFixed(1)}%</td>
-    <td>${esc(d.risco)}${d.aplicavel?'':' (N/A)'}</td></tr>`).join('');
-  const camadaRows = Object.entries(r.camadas).map(([k, v]) => {
-    if(v.area_ha == null) return '';
-    const rot = {imovel:'Imóvel', app:'APP', reserva_legal:'Reserva Legal',
-      uso_consolidado:'Uso Consolidado', vegetacao_nativa:'Vegetação Nativa'}[k] || k;
-    const top = (v.classes||[]).slice().sort((a,b)=>b.area_ha-a.area_ha).slice(0,3)
-      .map(c=>`${esc(c.classe)} ${c.pct.toFixed(0)}%`).join(', ');
-    return `<tr><td>${rot}</td><td style="text-align:right">${v.area_ha.toFixed(2)}</td><td>${top||'—'}</td></tr>`;
-  }).join('');
-  const grauCor = GRAU_COR[r.grau_conformidade] || '#999';
+function relAnalise(){
+  const r = state.resultadoAnalise;
+  if(!r){ toast('Execute a análise primeiro.', 'warn'); return; }
+  const m = r.modulos || {};
+  const tipoRotulo = {completa:'Análise Ambiental Completa', auditoria:'Auditoria Ambiental',
+    vegetacao:'Análise de Vegetação', supressao:'Supressão de Vegetação',
+    conformidade:'Conformidade Ambiental', temporal:'Comparativo Temporal',
+    recuperacao:'Recuperação Ambiental'}[r.tipo] || r.tipo;
+  const corTag = m.score ? corScoreHex(m.score.valor) : '#1a7f4b';
+
+  let corpo = '';
+  if(m.score){
+    const s = m.score;
+    corpo += `<p style="margin-bottom:10px"><span class="grau">${esc(s.classificacao)}</span>
+      &nbsp; Score de conformidade: <b style="font-size:1.3em">${s.valor == null ? '—' : s.valor.toFixed(1)}</b>/100</p>
+      <p style="font-size:.82em;color:#555">${esc(s.formula)}</p>`;
+  }
+  if(m.cruzamentos){
+    const rows = m.cruzamentos.map(c => c.aplicavel ? `<tr>
+        <td>${esc(c.titulo)}</td>
+        <td style="text-align:right">${c.area_avaliada_ha.toFixed(2)}</td>
+        <td style="text-align:right">${c.area_divergente_ha.toFixed(2)}</td>
+        <td style="text-align:right">${c.pct_conformidade.toFixed(1)}%</td>
+        <td style="font-size:.85em">${esc(c.justificativa)}</td></tr>`
+      : `<tr><td>${esc(c.titulo)}</td><td colspan="4" style="color:#999">N/A — camada não fornecida</td></tr>`).join('');
+    corpo += `<h2>Cruzamentos espaciais (CAR × Sentinel-2 × MapBiomas)</h2>
+      <table><thead><tr><th>Cruzamento</th><th style="text-align:right">Avaliada (ha)</th>
+      <th style="text-align:right">Divergente (ha)</th><th style="text-align:right">Conformidade</th>
+      <th>Justificativa técnica</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+  if(m.composicao){
+    const comp = (m.composicao.por_camada.imovel||[]).slice().sort((a,b)=>b.area_ha-a.area_ha);
+    corpo += `<h2>Composição de uso do imóvel (Sentinel-2)</h2>
+      <table><thead><tr><th>Classe</th><th style="text-align:right">Área (ha)</th>
+      <th style="text-align:right">%</th></tr></thead><tbody>` +
+      comp.map(c => `<tr><td><span style="background:${c.cor};display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:6px;vertical-align:middle"></span>${esc(c.classe)}</td>
+        <td style="text-align:right">${c.area_ha.toFixed(2)}</td><td style="text-align:right">${c.pct.toFixed(1)}%</td></tr>`).join('') +
+      `</tbody></table>`;
+  }
+  if(m.supressao){
+    corpo += `<h2>Supressão de vegetação</h2><p>Vegetação nativa em ${m.supressao.ano_referencia}:
+      <b>${m.supressao.nativa_historica_ha.toFixed(2)} ha</b> · Suprimida:
+      <b>${m.supressao.suprimida_ha.toFixed(2)} ha (${m.supressao.pct_suprimida}%)</b>.<br>
+      <span style="font-size:.85em;color:#555">${esc(m.supressao.justificativa)}</span></p>`;
+  }
+  if(m.recuperacao){
+    corpo += `<h2>Recuperação ambiental</h2><p>Área antrópica em ${m.recuperacao.ano_referencia}:
+      <b>${m.recuperacao.antropica_historica_ha.toFixed(2)} ha</b> · Regenerada:
+      <b>${m.recuperacao.regenerada_ha.toFixed(2)} ha (${m.recuperacao.pct_regenerada}%)</b>.<br>
+      <span style="font-size:.85em;color:#555">${esc(m.recuperacao.justificativa)}</span></p>`;
+  }
+  if(m.temporal){
+    const anos = Object.keys(m.temporal.anos).sort();
+    corpo += `<h2>Comparativo temporal (MapBiomas)</h2>
+      <table><thead><tr><th>Ano</th><th style="text-align:right">Nativa (ha)</th>
+      <th style="text-align:right">Antrópica (ha)</th><th style="text-align:right">Água (ha)</th></tr></thead><tbody>` +
+      anos.map(a => { const v = m.temporal.anos[a]; return `<tr><td>${a}</td>
+        <td style="text-align:right">${v.nativa_ha.toFixed(2)}</td>
+        <td style="text-align:right">${v.antropica_ha.toFixed(2)}</td>
+        <td style="text-align:right">${v.agua_ha.toFixed(2)}</td></tr>`; }).join('') + `</tbody></table>`;
+  }
 
   abrirRelatorio(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
-<title>Auditoria CAR – BondGis</title><style>
+<title>${esc(tipoRotulo)} – BondGis</title><style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:"Segoe UI",Arial,sans-serif;background:#f4f6f8;color:#1a2530}
   .header{background:#0a2b36;color:#fff;padding:24px 32px 20px}
-  .header .tag{background:${grauCor};color:#fff;font-size:.72em;padding:3px 10px;border-radius:12px;letter-spacing:1px;text-transform:uppercase}
+  .header .tag{background:${corTag};color:#fff;font-size:.72em;padding:3px 10px;border-radius:12px;letter-spacing:1px;text-transform:uppercase}
   .header h1{font-size:1.5em;margin:8px 0 4px}.header .sub{color:#a8d5c2;font-size:.9em}
-  .content{max-width:920px;margin:0 auto;padding:24px 16px 40px}
-  .scores{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 20px}
-  .sc{background:#fff;border-radius:8px;padding:12px 16px;min-width:130px;flex:1;box-shadow:0 1px 4px rgba(0,0,0,.08)}
-  .sc .l{font-size:.72em;color:#666;text-transform:uppercase;letter-spacing:.04em}
-  .sc .v{font-size:1.8em;font-weight:800;line-height:1.1;margin-top:2px}
-  .grau{display:inline-block;padding:6px 14px;border-radius:20px;color:#fff;font-weight:700;background:${grauCor}}
+  .content{max-width:960px;margin:0 auto;padding:24px 16px 40px}
+  .grau{display:inline-block;padding:6px 14px;border-radius:20px;color:#fff;font-weight:700;background:${corTag}}
   table{border-collapse:collapse;width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-top:8px}
   th{background:#1a7f4b;color:#fff;padding:9px 13px;text-align:left;font-size:.83em}
-  td{border-bottom:1px solid #eee;padding:8px 13px;font-size:.85em}
+  td{border-bottom:1px solid #eee;padding:8px 13px;font-size:.85em;vertical-align:top}
   h2{color:#1a7f4b;margin:26px 0 8px}
   .footer{text-align:center;margin-top:30px;font-size:.78em;color:#999}
-  @media print{.noprint{display:none}}
 </style></head><body>
-<div class="header"><div class="tag">Auditoria CAR</div>
-  <h1>Relatório de Auditoria Ambiental</h1>
+<div class="header"><div class="tag">${esc(tipoRotulo)}</div>
+  <h1>Relatório de Análise Ambiental</h1>
   <div class="sub">${esc(r.imovelNome||'Imóvel')} · ${r.area_total_ha.toFixed(2)} ha ·
-    Sentinel-2 ${r.image_date?('('+esc(r.image_date)+')'):''} × MapBiomas ${r.mapbiomas_ano}</div></div>
+    Sentinel-2 ${r.image_date?('('+esc(r.image_date)+')'):''} × MapBiomas ${r.mapbiomas_ano}
+    (hist. ${r.mapbiomas_ano_historico})</div></div>
 <div class="content">
-  <p style="margin-bottom:10px"><span class="grau">${esc(r.grau_conformidade)}</span>
-    &nbsp; Índice Geral de Conformidade: <b style="font-size:1.3em">${s.indice_geral?.toFixed(0) ?? '—'}</b>/100</p>
-  <div class="scores">
-    ${scoreCard('Ambiental', s.ambiental)}${scoreCard('CAR', s.car)}${scoreCard('Vegetação', s.vegetacao)}
-    ${scoreCard('APP', s.app)}${scoreCard('Reserva Legal', s.reserva_legal)}
-  </div>
-  <h2>Divergências detectadas</h2>
-  <table><thead><tr><th>Tipo</th><th style="text-align:right">Área (ha)</th><th style="text-align:right">% imóvel</th><th>Risco</th></tr></thead>
-    <tbody>${divRows}</tbody></table>
-  <h2>Composição por camada do CAR</h2>
-  <table><thead><tr><th>Camada</th><th style="text-align:right">Área (ha)</th><th>Classes predominantes</th></tr></thead>
-    <tbody>${camadaRows}</tbody></table>
-  <p style="margin-top:20px" class="noprint"><button onclick="window.print()" style="padding:8px 16px;border:none;border-radius:6px;background:#1a7f4b;color:#fff;font-weight:600;cursor:pointer">Imprimir / Salvar PDF</button></p>
-  <p class="footer">Gerado por BondGis · Auditoria preliminar (índices Sentinel-2 + MapBiomas) · ${esc(agora())}</p>
+  ${corpo}
+  <p class="footer">Gerado por BondGis · Análise preliminar por sensoriamento remoto
+    (não substitui laudo oficial) · ${esc(agora())}</p>
 </div></body></html>`);
+}
+function corScoreHex(v){
+  if(v == null) return '#999999';
+  if(v >= 90) return '#1a9850';
+  if(v >= 70) return '#f2c744';
+  if(v >= 50) return '#e8842c';
+  return '#d7301f';
 }
 
 /* ── Inicialização da UI ──────────────────────────────────────────── */
@@ -2663,9 +2661,8 @@ $('btn-rel-temporal').addEventListener('click', relExtratoTemporal);
 $('btn-rel-csv').addEventListener('click', exportarCsvTemporal);
 $('btn-rel-sobrep').addEventListener('click', relSobreposicao);
 
-// Aba Satélite (Sentinel-2 via Earth Engine)
+// Aba Satélite (visualização Sentinel-2 via Earth Engine)
 $('btn-sat-visualizar').addEventListener('click', satVisualizar);
-$('btn-sat-stats').addEventListener('click', satEstatisticas);
 $('btn-sat-datas').addEventListener('click', satDatas);
 $('btn-sat-serie').addEventListener('click', satSerie);
 $('rng-sat-nuvem').addEventListener('input', e => $('lbl-sat-nuvem').textContent = e.target.value);
@@ -2674,17 +2671,17 @@ $('inp-sat-arquivo').addEventListener('change', e => {
   if(e.target.files[0]) carregarArquivoSatelite(e.target.files[0]);
   e.target.value = '';
 });
-// Aba Auditoria CAR
-$('btn-auditoria').addEventListener('click', executarAuditoria);
-$('rng-aud-nuvem').addEventListener('input', e => $('lbl-aud-nuvem').textContent = e.target.value);
+// Aba Analisar Área (fluxo único)
+$('btn-analisar').addEventListener('click', executarAnalise);
+$('rng-ana-nuvem').addEventListener('input', e => $('lbl-ana-nuvem').textContent = e.target.value);
 
-// Datas padrão: últimos 6 meses (Satélite e Auditoria)
+// Datas padrão: últimos 6 meses (Satélite e Analisar)
 (function initDatas(){
   const hoje = new Date();
   const antes = new Date(); antes.setMonth(antes.getMonth() - 6);
   const iso = d => d.toISOString().slice(0, 10);
   $('inp-sat-fim').value = iso(hoje);   $('inp-sat-inicio').value = iso(antes);
-  $('inp-aud-fim').value = iso(hoje);   $('inp-aud-inicio').value = iso(antes);
+  $('inp-ana-fim').value = iso(hoje);   $('inp-ana-inicio').value = iso(antes);
 })();
 atualizarStatusSatelite();
 

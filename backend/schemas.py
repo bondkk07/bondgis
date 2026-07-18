@@ -50,30 +50,6 @@ class TilesResponse(BaseModel):
     legend: List[LegendEntry] = []
 
 
-class StatsRequest(BaseAOIRequest):
-    pass
-
-
-class ClassAreaEntry(BaseModel):
-    codigo: int
-    classe: str
-    cor: str
-    area_ha: float
-    pct: float
-
-
-class StatsResponse(BaseModel):
-    area_total_ha: float
-    image_date: Optional[str] = None
-    n_images: int = 0
-    # médias dos índices espectrais sobre a AOI
-    indices: Dict[str, Optional[float]] = {}
-    # área por classe da classificação automática
-    classes: List[ClassAreaEntry] = []
-    # atalhos pedidos no requisito 8
-    resumo: Dict[str, float] = {}
-
-
 class DatesRequest(BaseAOIRequest):
     pass
 
@@ -108,31 +84,45 @@ class HealthResponse(BaseModel):
     message: Optional[str] = None
 
 
-# ── AUDITORIA_CAR ──────────────────────────────────────────────────────────
-class AuditoriaCamadas(BaseModel):
-    """Camadas do CAR (GeoJSON); todas opcionais exceto o imóvel."""
+# ── ANALISAR ÁREA (pipeline unificado) ────────────────────────────────────
+class TipoAnalise(str, Enum):
+    completa = "completa"
+    auditoria = "auditoria"
+    conformidade = "conformidade"
+    vegetacao = "vegetacao"
+    supressao = "supressao"
+    recuperacao = "recuperacao"
+    temporal = "temporal"
+
+
+class CamadasCAR(BaseModel):
+    """Camadas oficiais do CAR (GeoJSON); todas opcionais exceto o limite."""
     app: Optional[Dict[str, Any]] = None
     reserva_legal: Optional[Dict[str, Any]] = None
-    uso_consolidado: Optional[Dict[str, Any]] = None
     vegetacao_nativa: Optional[Dict[str, Any]] = None
+    area_consolidada: Optional[Dict[str, Any]] = None
+    servidao: Optional[Dict[str, Any]] = None
+    uso_restrito: Optional[Dict[str, Any]] = None
+    hidrografia: Optional[Dict[str, Any]] = None
 
 
-class AuditoriaRequest(BaseModel):
+class AnaliseRequest(BaseModel):
     aoi: Dict[str, Any] = Field(..., description="GeoJSON do limite do imóvel")
-    camadas: AuditoriaCamadas = AuditoriaCamadas()
+    tipo: TipoAnalise = TipoAnalise.completa
+    camadas: CamadasCAR = CamadasCAR()
     date_start: str
     date_end: str
     max_cloud: float = Field(60.0, ge=0, le=100)
     mode: CompositeMode = CompositeMode.median
 
 
-class AuditoriaResponse(BaseModel):
+class AnaliseResponse(BaseModel):
+    tipo: str
     n_images: int
     image_date: Optional[str] = None
     mapbiomas_ano: int
+    mapbiomas_ano_historico: int
     area_total_ha: float
-    camadas: Dict[str, Any]
-    divergencias: List[Dict[str, Any]]
-    scores: Dict[str, Optional[float]]
-    grau_conformidade: str
+    camadas_recebidas: Dict[str, bool]
+    modulos: Dict[str, Any]
     geojson_divergencias: Dict[str, Any]

@@ -125,10 +125,9 @@ A aba **Satélite** mostrará "✔ Backend online · Earth Engine ativo".
 |--------|--------------------|-------------------------------------------------------|
 | GET    | `/api/health`      | Status da API e do Earth Engine.                      |
 | POST   | `/api/tiles`       | URL de tiles de uma camada (rgb/ndvi/.../classificacao). |
-| POST   | `/api/stats`       | Área por classe + índices médios recortados pela AOI. |
 | POST   | `/api/dates`       | Datas de imagens disponíveis no período/filtro.       |
 | POST   | `/api/timeseries`  | Série temporal (média do índice na AOI por imagem).   |
-| POST   | `/api/auditoria`   | Auditoria CAR: cruza CAR × Sentinel-2 × MapBiomas, detecta divergências, calcula scores e devolve GeoJSON das divergências. |
+| POST   | `/api/analise`     | **Fluxo único de análise** (`tipo`: completa, auditoria, conformidade, vegetacao, supressao, recuperacao, temporal). Cruza CAR × Sentinel-2 × MapBiomas no mesmo pipeline, com score de conformidade transparente e GeoJSON das divergências. Ver `REVISAO_ARQUITETURAL.md`. |
 
 Corpo comum (JSON):
 

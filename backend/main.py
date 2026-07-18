@@ -13,13 +13,13 @@ import logging
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-import auditoria
+import analise
 import sentinel
 from config import get_settings
 from earth_engine import init_earth_engine, is_initialized
 from schemas import (
-    AuditoriaRequest, AuditoriaResponse,
-    DatesRequest, DatesResponse, HealthResponse, StatsRequest, StatsResponse,
+    AnaliseRequest, AnaliseResponse,
+    DatesRequest, DatesResponse, HealthResponse,
     TilesRequest, TilesResponse, TimeSeriesRequest, TimeSeriesResponse,
 )
 
@@ -86,21 +86,6 @@ def tiles(req: TilesRequest) -> TilesResponse:
     return TilesResponse(**data)
 
 
-@app.post("/api/stats", response_model=StatsResponse)
-def stats(req: StatsRequest) -> StatsResponse:
-    _ensure_ee()
-    try:
-        data = sentinel.compute_stats(
-            req.aoi, req.date_start, req.date_end, req.max_cloud, req.mode.value,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("Erro em /api/stats")
-        raise HTTPException(status_code=500, detail=f"Erro ao calcular estatísticas: {exc}")
-    return StatsResponse(**data)
-
-
 @app.post("/api/dates", response_model=DatesResponse)
 def dates(req: DatesRequest) -> DatesResponse:
     _ensure_ee()
@@ -132,20 +117,22 @@ def timeseries(req: TimeSeriesRequest) -> TimeSeriesResponse:
     return TimeSeriesResponse(**data)
 
 
-@app.post("/api/auditoria", response_model=AuditoriaResponse)
-def auditoria_car(req: AuditoriaRequest) -> AuditoriaResponse:
+@app.post("/api/analise", response_model=AnaliseResponse)
+def analisar_area(req: AnaliseRequest) -> AnaliseResponse:
+    """Fluxo único: selecionar área → tipo de análise → processar → resultado.
+    Todos os tipos compartilham o mesmo pipeline (ver analise.py)."""
     _ensure_ee()
     try:
-        data = auditoria.run_auditoria(
-            req.aoi, req.camadas.model_dump(), req.date_start, req.date_end,
-            req.max_cloud, req.mode.value,
+        data = analise.run_analise(
+            req.aoi, req.camadas.model_dump(), req.tipo.value,
+            req.date_start, req.date_end, req.max_cloud, req.mode.value,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:  # noqa: BLE001
-        logger.exception("Erro em /api/auditoria")
-        raise HTTPException(status_code=500, detail=f"Erro na auditoria: {exc}")
-    return AuditoriaResponse(**data)
+        logger.exception("Erro em /api/analise")
+        raise HTTPException(status_code=500, detail=f"Erro na análise: {exc}")
+    return AnaliseResponse(**data)
 
 
 if __name__ == "__main__":
