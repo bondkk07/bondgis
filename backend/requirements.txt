@@ -1,0 +1,15 @@
+# BondGis — backend de geoprocessamento (Google Earth Engine + Sentinel-2)
+# Python 3.10+ recomendado.
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+earthengine-api==1.4.3
+pydantic==2.10.4
+pydantic-settings==2.7.1
+python-dotenv==1.0.1
+
+# --- Opcional: persistência PostgreSQL + PostGIS (desligado por padrão) ---
+# Descomente se for usar o módulo optional_postgis.py.
+# psycopg[binary]==3.2.3
+# SQLAlchemy==2.0.36
+# GeoAlchemy2==0.16.0

@@ -1,1 +1,10 @@
 .claude/settings.local.json
+
+# ── Backend (Python / Earth Engine) ──────────────────────────────
+# NUNCA versionar credenciais nem ambientes.
+backend/.env
+backend/*.json
+backend/.venv/
+backend/__pycache__/
+**/__pycache__/
+*.pyc

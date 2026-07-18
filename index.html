@@ -25,6 +25,8 @@
 <script src="https://unpkg.com/shpjs@6.1.0/dist/shp.js"></script>
 <!-- geotiff.js (leitura dos COGs do MapBiomas) -->
 <script src="https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js"></script>
+<!-- togeojson: converte KML → GeoJSON no navegador (aba Satélite) -->
+<script src="https://cdn.jsdelivr.net/npm/@tmcw/togeojson@5.8.1/dist/togeojson.umd.js"></script>
 
 <style>
 :root{
@@ -328,6 +330,10 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 1 5 0 7-1.5 3-4.5 5-8.5 5"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 11 13 11 11"/></svg>
         <span>MapBiomas</span>
       </button>
+      <button data-tab="satelite" title="Satélite (Sentinel-2)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 7 9 3 3 9l4 4M17 11l4 4-6 6-4-4"/><path d="m8 12 4 4M16 8l2-2M19 5l1-1"/><path d="M9 21H3v-6"/></svg>
+        <span>Satélite</span>
+      </button>
       <button data-tab="camadas" title="Camadas">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
         <span>Camadas</span>
@@ -426,6 +432,68 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
       <div id="res-mapbiomas"></div>
     </section>
 
+    <!-- ══ ABA: SATÉLITE (Sentinel-2 via Earth Engine) ════ -->
+    <section class="painel" id="tab-satelite">
+      <h3>Satélite — Sentinel-2 (Earth Engine)</h3>
+      <div id="sat-status" class="log" style="margin-bottom:10px"></div>
+
+      <label>Propriedade (camada de análise)</label>
+      <select id="sel-sat-camada"></select>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <button class="btn mini sec" id="btn-sat-arquivo">Carregar GeoJSON/KML…</button>
+      </div>
+      <input type="file" id="inp-sat-arquivo" accept=".geojson,.json,.kml" style="display:none">
+
+      <label style="margin-top:12px">Camada / índice espectral</label>
+      <select id="sel-sat-layer">
+        <option value="rgb">RGB — cor verdadeira</option>
+        <option value="ndvi" selected>NDVI — vigor da vegetação</option>
+        <option value="ndre">NDRE — clorofila (red-edge)</option>
+        <option value="ndwi">NDWI — água / umidade superficial</option>
+        <option value="ndmi">NDMI — umidade da vegetação</option>
+        <option value="bsi">BSI — solo exposto</option>
+        <option value="nbr">Queimadas — NBR</option>
+        <option value="classificacao">Classificação automática (9 classes)</option>
+      </select>
+
+      <label style="margin-top:12px">Composição do período</label>
+      <select id="sel-sat-modo">
+        <option value="recent" selected>Imagem mais recente</option>
+        <option value="median">Mediana do período (menos nuvens)</option>
+      </select>
+
+      <div style="display:flex;gap:8px">
+        <div style="flex:1">
+          <label>Data inicial</label>
+          <input type="date" id="inp-sat-inicio">
+        </div>
+        <div style="flex:1">
+          <label>Data final</label>
+          <input type="date" id="inp-sat-fim">
+        </div>
+      </div>
+
+      <label>Nuvens máximas: <b id="lbl-sat-nuvem">60</b>%</label>
+      <input type="range" id="rng-sat-nuvem" min="0" max="100" value="60"
+             style="width:100%;accent-color:var(--accent)">
+
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn" id="btn-sat-visualizar">Visualizar no mapa</button>
+        <button class="btn sec" id="btn-sat-stats">Calcular estatísticas</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <button class="btn mini sec" id="btn-sat-datas">Datas disponíveis</button>
+        <button class="btn mini sec" id="btn-sat-serie">Série temporal (NDVI)</button>
+      </div>
+      <p class="hint">Requer o backend Earth Engine em execução (veja
+        <b>backend/README.md</b>). Configure a URL do backend em ⚙ Configurações.
+        O processamento é feito no servidor; o mapa recebe apenas os tiles.</p>
+
+      <progress id="prog-sat" value="0" max="100" style="display:none"></progress>
+      <div class="log" id="log-sat"></div>
+      <div id="res-satelite"></div>
+    </section>
+
     <!-- ══ ABA: CAMADAS ═══════════════════════════════════ -->
     <section class="painel" id="tab-camadas">
       <h3>Camadas do projeto</h3>
@@ -477,6 +545,11 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
     <p class="hint">Os GeoServers públicos (SICAR, FUNAI, INPE…) nem sempre enviam cabeçalhos
       CORS. Em produção, use um backend/proxy próprio. A URL de destino é anexada
       (codificada) ao final do prefixo.</p>
+    <label style="margin-top:12px">URL do backend Earth Engine (aba Satélite)</label>
+    <input type="text" id="inp-api" placeholder="http://localhost:8000">
+    <p class="hint">Endereço da API FastAPI (Sentinel-2). Em dev local:
+      <b>http://localhost:8000</b>. Em produção, a URL do serviço hospedado
+      (Render, Cloud Run…). Deixe vazio para desativar a aba Satélite.</p>
     <div style="display:flex;gap:8px;margin-top:14px">
       <button class="btn" onclick="salvarCfg()">Salvar</button>
       <button class="btn sec" onclick="document.getElementById('modal-cfg').classList.remove('on')">Fechar</button>
@@ -742,8 +815,12 @@ const state = {
   codigoCar: '',
   resultadoMapBiomas: null,
   resultadoSobrep: null,
+  resultadoSatelite: null,
 };
-let cfg = { proxy: localStorage.getItem('lyssa_proxy') || '' };
+let cfg = {
+  proxy: localStorage.getItem('lyssa_proxy') || '',
+  apiBase: localStorage.getItem('bondgis_api') || 'http://localhost:8000',
+};
 
 /* ── Mapa ─────────────────────────────────────────────────────────── */
 const map = L.map('map', {zoomControl:true}).setView([-12.5, -55.0], 5);
@@ -751,7 +828,10 @@ const baseOSM = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
   {maxZoom:19, attribution:'© OpenStreetMap'}).addTo(map);
 const baseSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
   {maxZoom:19, attribution:'Esri World Imagery'});
-L.control.layers({'OpenStreetMap':baseOSM,'Satélite (Esri)':baseSat}, {}, {position:'topright'}).addTo(map);
+// Controle de camadas do Leaflet — mantém referência para registrar/remover
+// os overlays de satélite (Earth Engine) dinamicamente.
+const layersControl = L.control.layers(
+  {'OpenStreetMap':baseOSM,'Satélite (Esri)':baseSat}, {}, {position:'topright'}).addTo(map);
 L.control.scale({imperial:false}).addTo(map);
 
 /* ── Utilidades ───────────────────────────────────────────────────── */
@@ -833,7 +913,9 @@ function adicionarCamadaWMS(info){
 function removerCamada(id){
   const i = state.registro.findIndex(c => c.id === id);
   if(i < 0) return;
-  map.removeLayer(state.registro[i].leafletLayer);
+  const c = state.registro[i];
+  map.removeLayer(c.leafletLayer);
+  if(c.tipo === 'gee') layersControl.removeLayer(c.leafletLayer);
   state.registro.splice(i, 1);
   atualizarUICamadas();
 }
@@ -846,9 +928,11 @@ function alternarCamada(id){
 }
 function zoomCamada(id){
   const c = state.registro.find(x => x.id === id);
-  if(c && (c.tipo === 'vector' || c.tipo === 'raster')){
-    const b = c.leafletLayer.getBounds();
-    if(b.isValid()) map.fitBounds(b.pad(0.15));
+  if(!c) return;
+  if(c.bounds && c.bounds.isValid()){ map.fitBounds(c.bounds.pad(0.15)); return; }
+  if(c.tipo === 'vector' || c.tipo === 'raster'){
+    const b = c.leafletLayer.getBounds ? c.leafletLayer.getBounds() : null;
+    if(b && b.isValid()) map.fitBounds(b.pad(0.15));
   }
 }
 const camadasVetoriais = () => state.registro.filter(c => c.tipo === 'vector');
@@ -876,7 +960,7 @@ function atualizarUICamadas(){
     return sorted.map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('')
       || '<option value="">— nenhuma camada vetorial —</option>';
   };
-  for(const id of ['sel-sobrep-imovel','sel-rel-imovel','sel-mb-camada'])
+  for(const id of ['sel-sobrep-imovel','sel-rel-imovel','sel-mb-camada','sel-sat-camada'])
     $(id).innerHTML = opts('IMÓVEL');
 }
 
@@ -1938,12 +2022,264 @@ ${secoes}
 /* ── Configurações ────────────────────────────────────────────────── */
 function abrirCfg(){
   $('inp-proxy').value = cfg.proxy;
+  $('inp-api').value = cfg.apiBase;
   $('modal-cfg').classList.add('on');
 }
 function salvarCfg(){
   cfg.proxy = $('inp-proxy').value.trim();
+  cfg.apiBase = $('inp-api').value.trim().replace(/\/+$/, '');
   localStorage.setItem('lyssa_proxy', cfg.proxy);
+  localStorage.setItem('bondgis_api', cfg.apiBase);
   $('modal-cfg').classList.remove('on');
+  atualizarStatusSatelite();
+}
+
+/* ══ Satélite — integração Sentinel-2 via backend Earth Engine ══════════
+   O frontend nunca vê credenciais: envia a AOI (GeoJSON) + filtros ao
+   backend FastAPI e recebe URLs de tiles já assinadas ou estatísticas.
+   A URL do backend é configurável (⚙ Configurações) e fica no localStorage. */
+async function apiPost(rota, corpo, timeoutMs=120000){
+  if(!cfg.apiBase) throw new Error('URL do backend não configurada (⚙ Configurações).');
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), timeoutMs);
+  try{
+    const resp = await fetch(cfg.apiBase + rota, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(corpo), signal: ctl.signal,
+    });
+    const txt = await resp.text();
+    let json; try{ json = txt ? JSON.parse(txt) : {}; } catch{ json = {erro:txt}; }
+    if(!resp.ok) throw new Error(json.detail || json.erro || `HTTP ${resp.status}`);
+    return json;
+  } finally { clearTimeout(t); }
+}
+
+async function atualizarStatusSatelite(){
+  const el = $('sat-status');
+  if(!el) return;
+  if(!cfg.apiBase){
+    el.innerHTML = '⚙ Backend não configurado. Defina a URL em Configurações.';
+    return;
+  }
+  el.innerHTML = `Verificando backend em ${esc(cfg.apiBase)}…`;
+  try{
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 8000);
+    const resp = await fetch(cfg.apiBase + '/api/health', {signal: ctl.signal});
+    clearTimeout(t);
+    const h = await resp.json();
+    if(h.earth_engine)
+      el.innerHTML = `✔ Backend online · Earth Engine ativo (projeto <b>${esc(h.project||'?')}</b>).`;
+    else
+      el.innerHTML = `⚠ Backend online, mas o Earth Engine não inicializou: ${esc(h.message||'')}`;
+  } catch(e){
+    el.innerHTML = `✖ Backend inacessível em ${esc(cfg.apiBase)}. Ele está rodando? (veja backend/README.md)`;
+  }
+}
+
+/* Monta o corpo comum das requisições a partir da UI. */
+function satParamsBase(){
+  const camId = Number($('sel-sat-camada').value);
+  const cam = state.registro.find(c => c.id === camId);
+  if(!cam) throw new Error('Selecione uma propriedade (camada vetorial).');
+  const geom = unirFeatures(featuresPoligonais(cam.geojson));
+  if(!geom) throw new Error('A camada selecionada não contém polígonos.');
+  const inicio = $('inp-sat-inicio').value, fim = $('inp-sat-fim').value;
+  if(!inicio || !fim) throw new Error('Informe as datas inicial e final.');
+  if(inicio > fim) throw new Error('A data inicial não pode ser maior que a final.');
+  return {
+    aoi: geom, cam,
+    date_start: inicio, date_end: fim,
+    max_cloud: Number($('rng-sat-nuvem').value),
+    mode: $('sel-sat-modo').value,
+  };
+}
+
+function boundsDaAOI(geojson){
+  const [minX, minY, maxX, maxY] = turf.bbox(geojson);
+  return L.latLngBounds([[minY, minX], [maxY, maxX]]);
+}
+
+/* Adiciona um overlay de tiles do Earth Engine como camada gerenciável. */
+function adicionarCamadaGEE(nome, tileUrl, attribution, aoiGeojson){
+  const anterior = state.registro.find(c => c.nome === nome && c.tipo === 'gee');
+  if(anterior) removerCamada(anterior.id);
+  const leafletLayer = L.tileLayer(tileUrl, {attribution, opacity:1, maxZoom:19}).addTo(map);
+  const bounds = boundsDaAOI(aoiGeojson);
+  const item = {id:++state.seq, nome, grupo:'SATELITE', tipo:'gee',
+    leafletLayer, visivel:true, cor:'#00b894', bounds};
+  state.registro.push(item);
+  layersControl.addOverlay(leafletLayer, nome);
+  atualizarUICamadas();
+  if(bounds.isValid()) map.fitBounds(bounds.pad(0.1));
+  return item;
+}
+
+async function satVisualizar(){
+  let p; try{ p = satParamsBase(); }catch(e){ logTo('log-sat', `✖ ${e.message}`, true); return; }
+  const layer = $('sel-sat-layer').value;
+  const btn = $('btn-sat-visualizar'), prog = $('prog-sat');
+  btn.disabled = true; prog.style.display = 'block'; prog.removeAttribute('value');
+  logTo('log-sat', `Gerando camada "${layer}" no servidor…`, true);
+  try{
+    const r = await apiPost('/api/tiles', {
+      aoi:p.aoi, layer, date_start:p.date_start, date_end:p.date_end,
+      max_cloud:p.max_cloud, mode:p.mode,
+    });
+    const nome = `S2 ${layer.toUpperCase()}${r.image_date ? ' '+r.image_date : ''}`;
+    adicionarCamadaGEE(nome, r.tile_url, r.attribution, p.aoi);
+    logTo('log-sat', `✔ ${nome} — ${r.n_images} imagem(ns) no período.`);
+    renderLegendaSat(r.legend);
+  } catch(e){ logTo('log-sat', `✖ ${e.message}`); }
+  finally { btn.disabled = false; prog.style.display = 'none'; }
+}
+
+function renderLegendaSat(legend){
+  const box = $('res-satelite');
+  if(!legend || !legend.length){ return; }
+  box.innerHTML = `<h3>Legenda</h3>` + legend.map(l =>
+    `<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;margin:3px 0">
+       <span class="dot" style="background:${l.color}"></span>${esc(l.label)}</div>`).join('');
+}
+
+async function satEstatisticas(){
+  let p; try{ p = satParamsBase(); }catch(e){ logTo('log-sat', `✖ ${e.message}`, true); return; }
+  const btn = $('btn-sat-stats'), prog = $('prog-sat');
+  btn.disabled = true; prog.style.display = 'block'; prog.removeAttribute('value');
+  logTo('log-sat', 'Calculando estatísticas da área no servidor…', true);
+  try{
+    const r = await apiPost('/api/stats', {
+      aoi:p.aoi, date_start:p.date_start, date_end:p.date_end,
+      max_cloud:p.max_cloud, mode:p.mode,
+    });
+    state.resultadoSatelite = {...r, camNome: p.cam.nome};
+    renderEstatisticasSat(r);
+    logTo('log-sat', `✔ Estatísticas calculadas (${r.n_images} imagem(ns)).`);
+  } catch(e){ logTo('log-sat', `✖ ${e.message}`); }
+  finally { btn.disabled = false; prog.style.display = 'none'; }
+}
+
+function renderEstatisticasSat(r){
+  const box = $('res-satelite');
+  const linhas = (r.classes||[]).map(c => `<tr>
+    <td><span class="dot" style="background:${c.cor}"></span>${esc(c.classe)}</td>
+    <td style="text-align:right">${c.area_ha.toFixed(2)}</td>
+    <td style="text-align:right">${c.pct.toFixed(1)}%</td></tr>`).join('');
+  const idx = r.indices || {};
+  const idxLinhas = Object.entries(idx).map(([k,v]) =>
+    `<tr><td>${esc(k)}</td><td style="text-align:right" colspan="2">${v==null?'–':v.toFixed(3)}</td></tr>`).join('');
+  box.innerHTML = `
+    <p class="hint" style="margin-top:10px">Área total: <b>${r.area_total_ha.toFixed(2)} ha</b>
+      ${r.image_date ? '· Imagem: '+esc(r.image_date) : ''} · ${r.n_images} imagem(ns)</p>
+    <h3>Classificação automática</h3>
+    <table class="res"><thead><tr><th>Classe</th><th style="text-align:right">ha</th>
+      <th style="text-align:right">%</th></tr></thead><tbody>${linhas || '<tr><td colspan="3">—</td></tr>'}</tbody></table>
+    <h3>Índices médios na área</h3>
+    <table class="res"><thead><tr><th>Índice</th><th style="text-align:right" colspan="2">Média</th></tr></thead>
+      <tbody>${idxLinhas}</tbody></table>
+    <button class="btn sec" style="margin-top:12px" onclick="relSatelite()">Abrir relatório</button>`;
+}
+
+async function satDatas(){
+  let p; try{ p = satParamsBase(); }catch(e){ logTo('log-sat', `✖ ${e.message}`, true); return; }
+  logTo('log-sat', 'Buscando datas disponíveis…', true);
+  try{
+    const r = await apiPost('/api/dates', {
+      aoi:p.aoi, date_start:p.date_start, date_end:p.date_end,
+      max_cloud:p.max_cloud, mode:p.mode,
+    });
+    if(!r.dates.length){ logTo('log-sat', '⚠ Nenhuma data no período/filtro.'); return; }
+    logTo('log-sat', `✔ ${r.dates.length} data(s):`);
+    r.dates.slice(0, 40).forEach(d =>
+      logTo('log-sat', `   ${d.date}${d.cloud!=null ? ` · ${d.cloud.toFixed(0)}% nuvens` : ''}`));
+  } catch(e){ logTo('log-sat', `✖ ${e.message}`); }
+}
+
+async function satSerie(){
+  let p; try{ p = satParamsBase(); }catch(e){ logTo('log-sat', `✖ ${e.message}`, true); return; }
+  const prog = $('prog-sat');
+  prog.style.display = 'block'; prog.removeAttribute('value');
+  logTo('log-sat', 'Calculando série temporal de NDVI…', true);
+  try{
+    const r = await apiPost('/api/timeseries', {
+      aoi:p.aoi, index:'ndvi', date_start:p.date_start, date_end:p.date_end,
+      max_cloud:p.max_cloud, mode:p.mode,
+    });
+    const pts = r.points.filter(x => x.value != null);
+    if(!pts.length){ logTo('log-sat', '⚠ Sem valores válidos no período.'); return; }
+    logTo('log-sat', `✔ ${pts.length} ponto(s) de NDVI:`);
+    pts.forEach(x => logTo('log-sat', `   ${x.date} · NDVI ${x.value.toFixed(3)}`));
+  } catch(e){ logTo('log-sat', `✖ ${e.message}`); }
+  finally { prog.style.display = 'none'; }
+}
+
+function relSatelite(){
+  const r = state.resultadoSatelite;
+  if(!r){ toast('Calcule as estatísticas primeiro.', 'warn'); return; }
+  const classes = (r.classes||[]).map(c => `<tr>
+    <td><span style="background:${c.cor};display:inline-block;width:12px;height:12px;margin-right:6px;border-radius:2px;vertical-align:middle"></span>${esc(c.classe)}</td>
+    <td style="text-align:right">${c.area_ha.toFixed(2)}</td>
+    <td style="text-align:right">${c.pct.toFixed(1)}%</td></tr>`).join('');
+  const rs = r.resumo || {};
+  abrirRelatorio(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Análise Sentinel-2 – BondGis</title><style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Segoe UI",Arial,sans-serif;background:#f4f6f8;color:#1a2530}
+  .header{background:#0a2b36;color:#fff;padding:24px 32px 20px}
+  .header .tag{background:#00b894;color:#fff;font-size:.72em;padding:3px 10px;border-radius:12px;letter-spacing:1px;text-transform:uppercase}
+  .header h1{font-size:1.5em;margin:8px 0 4px}.header .sub{color:#a8d5c2;font-size:.9em}
+  .content{max-width:900px;margin:0 auto;padding:24px 16px 40px}
+  .cards{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+  .card{background:#fff;border-radius:8px;padding:14px 18px;min-width:150px;box-shadow:0 1px 4px rgba(0,0,0,.08);flex:1}
+  .card .n{font-size:1.5em;font-weight:700;color:#0a2b36}.card .l{font-size:.78em;color:#666;margin-top:4px}
+  table{border-collapse:collapse;width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-top:8px}
+  th{background:#1a7f4b;color:#fff;padding:10px 14px;text-align:left;font-size:.85em}
+  td{border-bottom:1px solid #eee;padding:9px 14px;font-size:.87em}
+  .footer{text-align:center;margin-top:28px;font-size:.8em;color:#999}
+</style></head><body>
+<div class="header"><div class="tag">Sentinel-2</div>
+  <h1>Análise de Cobertura por Satélite</h1>
+  <div class="sub">${esc(r.camNome||'Propriedade')} ${r.image_date ? '· Imagem '+esc(r.image_date) : ''} · Fonte: Copernicus Sentinel-2 / Google Earth Engine</div></div>
+<div class="content">
+  <div class="cards">
+    <div class="card"><div class="n">${(rs.area_total_ha||0).toFixed(1)}</div><div class="l">Área total (ha)</div></div>
+    <div class="card"><div class="n">${(rs.vegetacao_ha||0).toFixed(1)}</div><div class="l">Vegetação (ha)</div></div>
+    <div class="card"><div class="n">${(rs.floresta_ha||0).toFixed(1)}</div><div class="l">Floresta (ha)</div></div>
+    <div class="card"><div class="n">${(rs.agricultura_ha||0).toFixed(1)}</div><div class="l">Agricultura (ha)</div></div>
+    <div class="card"><div class="n">${(rs.agua_ha||0).toFixed(1)}</div><div class="l">Água (ha)</div></div>
+    <div class="card"><div class="n">${(rs.solo_exposto_ha||0).toFixed(1)}</div><div class="l">Solo exposto (ha)</div></div>
+  </div>
+  <h2 style="color:#1a7f4b;margin-bottom:6px">Classificação automática por classe</h2>
+  <table><thead><tr><th>Classe</th><th style="text-align:right">Área (ha)</th><th style="text-align:right">%</th></tr></thead>
+    <tbody>${classes}</tbody></table>
+  <p class="footer">Gerado por BondGis · Classificação preliminar por índices espectrais · ${esc(agora())}</p>
+</div></body></html>`);
+}
+
+/* Carrega propriedade de arquivo GeoJSON/KML na aba Satélite. */
+function carregarArquivoSatelite(file){
+  const nome = file.name.replace(/\.[^.]+$/, '');
+  const ext = file.name.toLowerCase().split('.').pop();
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      let gj;
+      if(ext === 'kml'){
+        if(typeof toGeoJSON === 'undefined')
+          throw new Error('Conversor KML não carregou (sem internet?).');
+        const dom = new DOMParser().parseFromString(reader.result, 'text/xml');
+        gj = toGeoJSON.kml(dom);
+      } else {
+        gj = JSON.parse(reader.result);
+      }
+      if(!featuresPoligonais(gj).length)
+        throw new Error('Arquivo sem polígonos (Polygon/MultiPolygon).');
+      adicionarCamadaVetorial(`Propriedade ${nome}`, gj, 'AREA_IMOVEL');
+      $('sel-sat-camada').value = String(state.registro[state.registro.length-1].id);
+      logTo('log-sat', `✔ Propriedade "${nome}" carregada.`, true);
+    } catch(e){ logTo('log-sat', `✖ ${e.message}`, true); }
+  };
+  reader.readAsText(file);
 }
 
 /* ── Inicialização da UI ──────────────────────────────────────────── */
@@ -2022,6 +2358,27 @@ $('btn-rel-ambiental').addEventListener('click', relExtratoAmbiental);
 $('btn-rel-temporal').addEventListener('click', relExtratoTemporal);
 $('btn-rel-csv').addEventListener('click', exportarCsvTemporal);
 $('btn-rel-sobrep').addEventListener('click', relSobreposicao);
+
+// Aba Satélite (Sentinel-2 via Earth Engine)
+$('btn-sat-visualizar').addEventListener('click', satVisualizar);
+$('btn-sat-stats').addEventListener('click', satEstatisticas);
+$('btn-sat-datas').addEventListener('click', satDatas);
+$('btn-sat-serie').addEventListener('click', satSerie);
+$('rng-sat-nuvem').addEventListener('input', e => $('lbl-sat-nuvem').textContent = e.target.value);
+$('btn-sat-arquivo').addEventListener('click', () => $('inp-sat-arquivo').click());
+$('inp-sat-arquivo').addEventListener('change', e => {
+  if(e.target.files[0]) carregarArquivoSatelite(e.target.files[0]);
+  e.target.value = '';
+});
+// Datas padrão: últimos 6 meses
+(function initDatasSat(){
+  const hoje = new Date();
+  const antes = new Date(); antes.setMonth(antes.getMonth() - 6);
+  const iso = d => d.toISOString().slice(0, 10);
+  $('inp-sat-fim').value = iso(hoje);
+  $('inp-sat-inicio').value = iso(antes);
+})();
+atualizarStatusSatelite();
 
 montarCatalogo();
 atualizarUICamadas();

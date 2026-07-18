@@ -8,6 +8,27 @@
       "url": "http://localhost:8321",
       "webRoot": "${workspaceFolder}",
       "preLaunchTask": "BondGis: iniciar servidor local"
+    },
+    {
+      "name": "BondGis: backend Earth Engine (FastAPI)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["main:app", "--reload", "--port", "8000"],
+      "cwd": "${workspaceFolder}/backend",
+      "envFile": "${workspaceFolder}/backend/.env",
+      "jinja": false,
+      "console": "integratedTerminal"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "BondGis: frontend + backend",
+      "configurations": [
+        "BondGis: backend Earth Engine (FastAPI)",
+        "BondGis: abrir no navegador"
+      ],
+      "stopAll": true
     }
   ]
 }

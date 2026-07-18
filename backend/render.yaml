@@ -1,0 +1,19 @@
+# Deploy do backend no Render (https://render.com) — plano gratuito serve para testes.
+# Configure os segredos (EE_*) no painel do Render, não aqui.
+services:
+  - type: web
+    name: bondgis-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: EE_PROJECT
+        sync: false
+      - key: EE_SERVICE_ACCOUNT_EMAIL
+        sync: false
+      - key: EE_SERVICE_ACCOUNT_KEY_JSON
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: https://bondkk07.github.io

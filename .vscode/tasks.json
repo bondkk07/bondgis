@@ -29,6 +29,23 @@
           "endsPattern": "^Serving"
         }
       }
+    },
+    {
+      "label": "BondGis: backend Earth Engine (uvicorn)",
+      "type": "shell",
+      "command": "uvicorn",
+      "args": ["main:app", "--reload", "--port", "8000"],
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "isBackground": true,
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": {
+        "pattern": { "regexp": "^(Uvicorn running.*)$", "message": 1 },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Uvicorn running",
+          "endsPattern": "Application startup complete"
+        }
+      }
     }
   ]
 }
