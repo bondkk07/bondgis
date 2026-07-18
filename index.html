@@ -276,6 +276,20 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
 @keyframes toastIn{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:translateX(0)}}
 @keyframes toastOut{to{opacity:0;transform:translateX(18px)}}
 
+/* ── Modal de relatório (iframe + barra Baixar PDF) ────── */
+#relatorio-modal{position:fixed;inset:0;z-index:3000;background:rgba(2,6,15,.6);
+  backdrop-filter:blur(3px);display:flex;flex-direction:column;padding:24px;gap:0;animation:fadeSlide .18s var(--ease)}
+#relatorio-modal .rel-barra{display:flex;align-items:center;gap:8px;background:var(--bg-elevated);
+  border:1px solid var(--border);border-bottom:none;border-radius:var(--radius-lg) var(--radius-lg) 0 0;padding:10px 14px}
+#relatorio-modal .rel-tit{font-weight:700;font-size:13px;color:var(--text)}
+#relatorio-modal .rel-barra .btn{width:auto;padding:7px 14px;font-size:12.5px;margin:0}
+#relatorio-modal #rel-frame{flex:1;width:100%;border:1px solid var(--border);border-top:none;
+  border-radius:0 0 var(--radius-lg) var(--radius-lg);background:#fff}
+@media (max-width:640px){
+  #relatorio-modal{padding:8px}
+  #relatorio-modal .rel-tit{display:none}
+}
+
 /* ── Painel executivo da Auditoria ─────────────────────── */
 .score-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:10px 0}
 .score-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 12px}
@@ -1698,18 +1712,44 @@ function renderSobreposicao(){
 
 /* ── Relatórios (equivalente a relatorio.py) ──────────────────────── */
 function abrirRelatorio(html){
-  // Blob + <a target="_blank"> em vez de window.open(): é tratado como clique
-  // direto do usuário e não é interceptado por bloqueadores de pop-up.
-  const blob = new Blob([html], {type: 'text/html'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.target = '_blank';
-  a.rel = 'noopener';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 30000);
+  // Renderiza o relatório num modal in-app com <iframe srcdoc>. É confiável
+  // (não depende de abrir aba nova, que os navegadores bloqueiam) e o botão
+  // "Baixar PDF" imprime SÓ o conteúdo do iframe → PDF nativo do navegador.
+  document.getElementById('relatorio-modal')?.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'relatorio-modal';
+  modal.innerHTML = `
+    <div class="rel-barra">
+      <span class="rel-tit">Relatório</span>
+      <span style="flex:1"></span>
+      <button class="btn" id="rel-pdf">⬇ Baixar PDF</button>
+      <button class="btn sec" id="rel-nova-aba">Abrir em nova aba</button>
+      <button class="btn sec" id="rel-fechar">Fechar</button>
+    </div>
+    <iframe id="rel-frame" title="Relatório"></iframe>`;
+  document.body.appendChild(modal);
+
+  const frame = modal.querySelector('#rel-frame');
+  frame.srcdoc = html;
+
+  const imprimir = () => {
+    try{ frame.contentWindow.focus(); frame.contentWindow.print(); }
+    catch(e){ toast('Não foi possível abrir a impressão: ' + e.message, 'error'); }
+  };
+  modal.querySelector('#rel-pdf').addEventListener('click', imprimir);
+  modal.querySelector('#rel-nova-aba').addEventListener('click', () => {
+    const blob = new Blob([html], {type: 'text/html'});
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank', 'noopener');
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  });
+  const fechar = () => modal.remove();
+  modal.querySelector('#rel-fechar').addEventListener('click', fechar);
+  modal.addEventListener('click', e => { if(e.target === modal) fechar(); });
+  document.addEventListener('keydown', function esc(ev){
+    if(ev.key === 'Escape'){ fechar(); document.removeEventListener('keydown', esc); }
+  });
 }
 function relExtratoAmbiental(){
   const camId = Number($('sel-rel-imovel').value);
