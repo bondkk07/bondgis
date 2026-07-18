@@ -276,6 +276,20 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
 @keyframes toastIn{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:translateX(0)}}
 @keyframes toastOut{to{opacity:0;transform:translateX(18px)}}
 
+/* ── Painel executivo da Auditoria ─────────────────────── */
+.score-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:10px 0}
+.score-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 12px}
+.score-card .l{font-size:10.5px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.03em}
+.score-card .v{font-size:20px;font-weight:800;line-height:1.1;margin-top:3px;font-variant-numeric:tabular-nums}
+.score-bar{height:5px;border-radius:3px;background:var(--border);margin-top:6px;overflow:hidden}
+.score-bar > i{display:block;height:100%;border-radius:3px}
+.grau-badge{display:inline-block;padding:5px 12px;border-radius:var(--radius-full);font-weight:700;font-size:13px;color:#fff}
+.aud-div-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--radius-sm);background:var(--surface);margin:4px 0;font-size:12.5px}
+.aud-div-item .sev{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.aud-div-item .nome{flex:1}
+.aud-div-item .val{font-variant-numeric:tabular-nums;color:var(--text-secondary)}
+.aud-export{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px}
+
 /* ── Responsivo ────────────────────────────────────────── */
 @media (max-width:1100px){
   #sidebar{width:378px;min-width:378px}
@@ -333,6 +347,10 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
       <button data-tab="satelite" title="Satélite (Sentinel-2)">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 7 9 3 3 9l4 4M17 11l4 4-6 6-4-4"/><path d="m8 12 4 4M16 8l2-2M19 5l1-1"/><path d="M9 21H3v-6"/></svg>
         <span>Satélite</span>
+      </button>
+      <button data-tab="auditoria" title="Auditoria CAR">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <span>Auditoria</span>
       </button>
       <button data-tab="camadas" title="Camadas">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
@@ -492,6 +510,33 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
       <progress id="prog-sat" value="0" max="100" style="display:none"></progress>
       <div class="log" id="log-sat"></div>
       <div id="res-satelite"></div>
+    </section>
+
+    <!-- ══ ABA: AUDITORIA CAR ═════════════════════════════ -->
+    <section class="painel" id="tab-auditoria">
+      <h3>Auditoria CAR × Sentinel-2 × MapBiomas</h3>
+      <p class="hint">Cruza as camadas do CAR com a cobertura observada pelo Sentinel-2,
+        validada pelo MapBiomas, detecta divergências e gera indicadores de conformidade.
+        Requer o backend Earth Engine (⚙ Configurações).</p>
+
+      <label>Limite do imóvel</label>
+      <select id="sel-aud-imovel"></select>
+
+      <div id="aud-camadas-detectadas" class="log" style="margin-top:8px"></div>
+
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <div style="flex:1"><label>Data inicial</label><input type="date" id="inp-aud-inicio"></div>
+        <div style="flex:1"><label>Data final</label><input type="date" id="inp-aud-fim"></div>
+      </div>
+      <label>Nuvens máximas: <b id="lbl-aud-nuvem">40</b>%</label>
+      <input type="range" id="rng-aud-nuvem" min="0" max="100" value="40"
+             style="width:100%;accent-color:var(--accent)">
+
+      <button class="btn" id="btn-auditoria" style="margin-top:12px">Executar Auditoria</button>
+      <progress id="prog-aud" value="0" max="100" style="display:none"></progress>
+      <div class="log" id="log-aud"></div>
+
+      <div id="res-auditoria"></div>
     </section>
 
     <!-- ══ ABA: CAMADAS ═══════════════════════════════════ -->
@@ -816,6 +861,7 @@ const state = {
   resultadoMapBiomas: null,
   resultadoSobrep: null,
   resultadoSatelite: null,
+  resultadoAuditoria: null,
 };
 let cfg = {
   proxy: localStorage.getItem('lyssa_proxy') || '',
@@ -960,8 +1006,9 @@ function atualizarUICamadas(){
     return sorted.map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('')
       || '<option value="">— nenhuma camada vetorial —</option>';
   };
-  for(const id of ['sel-sobrep-imovel','sel-rel-imovel','sel-mb-camada','sel-sat-camada'])
+  for(const id of ['sel-sobrep-imovel','sel-rel-imovel','sel-mb-camada','sel-sat-camada','sel-aud-imovel'])
     $(id).innerHTML = opts('IMÓVEL');
+  if(typeof detectarCamadasCAR === 'function') detectarCamadasCAR();
 }
 
 /* ── Geometria (utilitários compartilhados por MapBiomas e Sobreposição) ── */
@@ -2282,6 +2329,223 @@ function carregarArquivoSatelite(file){
   reader.readAsText(file);
 }
 
+/* ══ AUDITORIA CAR — cruzamento CAR × Sentinel-2 × MapBiomas ════════════
+   Detecta as sub-camadas do CAR já carregadas (por grupo/nome), envia ao
+   backend junto com o limite do imóvel e renderiza o painel executivo, a
+   tabela de divergências, a camada Leaflet e os relatórios. */
+const AUD_CAR_MAP = {
+  app:              c => c.grupo === 'APP',
+  reserva_legal:    c => c.grupo === 'RESERVA_LEGAL',
+  vegetacao_nativa: c => c.grupo === 'VEGETACAO_NATIVA',
+  uso_consolidado:  c => /CONSOLIDAD/i.test(c.nome),
+};
+
+// Junta as feições de todas as camadas que casam num FeatureCollection.
+function _fcDe(camadas){
+  const feats = [];
+  for(const c of camadas) feats.push(...featuresPoligonais(c.geojson));
+  return feats.length ? turf.featureCollection(feats) : null;
+}
+
+function detectarCamadasCAR(){
+  const el = $('aud-camadas-detectadas');
+  if(!el) return {};
+  const vets = camadasVetoriais();
+  const det = {};
+  const rotulos = {app:'APP', reserva_legal:'Reserva Legal',
+    uso_consolidado:'Uso Consolidado', vegetacao_nativa:'Vegetação Nativa'};
+  const linhas = [];
+  for(const [chave, teste] of Object.entries(AUD_CAR_MAP)){
+    const achadas = vets.filter(teste);
+    det[chave] = _fcDe(achadas);
+    linhas.push(`${det[chave] ? '✔' : '—'} ${rotulos[chave]}: ${achadas.length ? achadas.map(c=>esc(c.nome)).join(', ') : 'não encontrada'}`);
+  }
+  el.innerHTML = '<b>Camadas do CAR detectadas:</b><br>' + linhas.join('<br>');
+  return det;
+}
+
+async function executarAuditoria(){
+  const camId = Number($('sel-aud-imovel').value);
+  const cam = state.registro.find(c => c.id === camId);
+  if(!cam){ logTo('log-aud', '✖ Selecione o limite do imóvel.', true); return; }
+  const imovel = unirFeatures(featuresPoligonais(cam.geojson));
+  if(!imovel){ logTo('log-aud', '✖ A camada do imóvel não contém polígonos.', true); return; }
+  const inicio = $('inp-aud-inicio').value, fim = $('inp-aud-fim').value;
+  if(!inicio || !fim || inicio > fim){ logTo('log-aud', '✖ Verifique as datas.', true); return; }
+
+  const camadas = detectarCamadasCAR();
+  const btn = $('btn-auditoria'), prog = $('prog-aud');
+  btn.disabled = true; prog.style.display = 'block'; prog.removeAttribute('value');
+  logTo('log-aud', 'Executando auditoria no servidor (pode levar até ~1 min)…', true);
+  try{
+    const r = await apiPost('/api/auditoria', {
+      aoi: imovel, camadas,
+      date_start: inicio, date_end: fim,
+      max_cloud: Number($('rng-aud-nuvem').value), mode: 'median',
+    }, 180000);
+    state.resultadoAuditoria = {...r, imovelNome: cam.nome, imovelGeojson: imovel};
+    desenharCamadaDivergencias(r.geojson_divergencias);
+    renderAuditoria(r);
+    logTo('log-aud', `✔ Auditoria concluída · grau: ${r.grau_conformidade}.`);
+  } catch(e){ logTo('log-aud', `✖ ${e.message}`); }
+  finally { btn.disabled = false; prog.style.display = 'none'; }
+}
+
+// Camada Leaflet das divergências (verde/amarelo/laranja/vermelho).
+function desenharCamadaDivergencias(geojson){
+  const anterior = state.registro.find(c => c.nome === 'Auditoria — divergências' && c.tipo === 'vector');
+  if(anterior) removerCamada(anterior.id);
+  if(!geojson || !geojson.features?.length) return;
+  const layer = L.geoJSON(geojson, {
+    style: f => ({color: f.properties.cor || '#f2c744', weight:1,
+      fillColor: f.properties.cor || '#f2c744', fillOpacity:.5}),
+    onEachFeature: (f, l) => l.bindPopup(`<b>${esc(f.properties.rotulo||'Divergência')}</b>`),
+  }).addTo(map);
+  const item = {id:++state.seq, nome:'Auditoria — divergências', grupo:'AUDITORIA',
+    tipo:'vector', geojson, leafletLayer:layer, visivel:true, cor:'#e8842c'};
+  state.registro.push(item);
+  atualizarUICamadas();
+}
+
+const GRAU_COR = {
+  'Conforme':'#1a9850', 'Atenção':'#f2c744',
+  'Divergência moderada':'#e8842c', 'Divergência crítica':'#d7301f',
+};
+function corScore(v){
+  if(v == null) return 'var(--text-tertiary)';
+  if(v >= 85) return '#1a9850';
+  if(v >= 70) return '#f2c744';
+  if(v >= 50) return '#e8842c';
+  return '#d7301f';
+}
+const SEV_COR = {2:'#f2c744', 3:'#e8842c', 4:'#d7301f', 1:'#1a9850'};
+
+function renderAuditoria(r){
+  const s = r.scores;
+  const card = (label, v) => {
+    const cor = corScore(v);
+    const txt = v == null ? 'N/D' : v.toFixed(0);
+    const w = v == null ? 0 : Math.max(0, Math.min(100, v));
+    return `<div class="score-card"><div class="l">${label}</div>
+      <div class="v" style="color:${cor}">${txt}</div>
+      <div class="score-bar"><i style="width:${w}%;background:${cor}"></i></div></div>`;
+  };
+  const divs = [...r.divergencias].sort((a,b) => b.severidade - a.severidade || b.pct - a.pct)
+    .map(d => `<div class="aud-div-item">
+      <span class="sev" style="background:${SEV_COR[d.severidade]||'#999'}"></span>
+      <span class="nome">${esc(d.tipo)}${d.aplicavel ? '' : ' <span style="color:var(--text-tertiary)">(N/A)</span>'}</span>
+      <span class="val">${d.area_ha.toFixed(1)} ha · ${d.pct.toFixed(1)}%</span></div>`).join('');
+
+  $('res-auditoria').innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+      <span class="grau-badge" style="background:${GRAU_COR[r.grau_conformidade]||'#999'}">${esc(r.grau_conformidade)}</span>
+      <span class="hint" style="margin:0">Índice Geral de Conformidade:
+        <b style="color:${corScore(s.indice_geral)};font-size:15px">${s.indice_geral?.toFixed(0) ?? '—'}</b>/100</span>
+    </div>
+    <div class="score-grid">
+      ${card('Score Ambiental', s.ambiental)}
+      ${card('Score CAR', s.car)}
+      ${card('Score Vegetação', s.vegetacao)}
+      ${card('Score APP', s.app)}
+      ${card('Score Reserva Legal', s.reserva_legal)}
+      ${card('Índice Geral', s.indice_geral)}
+    </div>
+    <h3>Divergências detectadas</h3>
+    <p class="hint" style="margin-top:0">Imagem ${r.image_date ? esc(r.image_date) : ''} ·
+      ${r.n_images} imagem(ns) · MapBiomas ${r.mapbiomas_ano} · área ${r.area_total_ha.toFixed(1)} ha</p>
+    ${divs}
+    <div class="aud-export">
+      <button class="btn sec" onclick="relAuditoria()">Relatório HTML / PDF</button>
+      <button class="btn sec" onclick="baixarAuditoriaJson()">JSON</button>
+      <button class="btn sec" onclick="baixarDivergenciasGeojson()">GeoJSON</button>
+    </div>`;
+}
+
+function baixarBlob(conteudo, nome, mime){
+  const blob = new Blob([conteudo], {type: mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = nome;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 20000);
+}
+function baixarAuditoriaJson(){
+  const r = state.resultadoAuditoria;
+  if(!r){ toast('Execute a auditoria primeiro.', 'warn'); return; }
+  const {imovelGeojson, ...limpo} = r;
+  baixarBlob(JSON.stringify(limpo, null, 2), 'auditoria_car.json', 'application/json');
+}
+function baixarDivergenciasGeojson(){
+  const r = state.resultadoAuditoria;
+  if(!r?.geojson_divergencias){ toast('Execute a auditoria primeiro.', 'warn'); return; }
+  baixarBlob(JSON.stringify(r.geojson_divergencias), 'auditoria_divergencias.geojson', 'application/geo+json');
+}
+
+function relAuditoria(){
+  const r = state.resultadoAuditoria;
+  if(!r){ toast('Execute a auditoria primeiro.', 'warn'); return; }
+  const s = r.scores;
+  const scoreCard = (label, v) => {
+    const cor = v==null?'#999':(v>=85?'#1a9850':v>=70?'#f2c744':v>=50?'#e8842c':'#d7301f');
+    return `<div class="sc"><div class="l">${label}</div><div class="v" style="color:${cor}">${v==null?'N/D':v.toFixed(0)}</div></div>`;
+  };
+  const divRows = [...r.divergencias].sort((a,b)=>b.severidade-a.severidade).map(d => `<tr>
+    <td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${SEV_COR[d.severidade]||'#999'};margin-right:6px"></span>${esc(d.tipo)}</td>
+    <td style="text-align:right">${d.area_ha.toFixed(2)}</td>
+    <td style="text-align:right">${d.pct.toFixed(1)}%</td>
+    <td>${esc(d.risco)}${d.aplicavel?'':' (N/A)'}</td></tr>`).join('');
+  const camadaRows = Object.entries(r.camadas).map(([k, v]) => {
+    if(v.area_ha == null) return '';
+    const rot = {imovel:'Imóvel', app:'APP', reserva_legal:'Reserva Legal',
+      uso_consolidado:'Uso Consolidado', vegetacao_nativa:'Vegetação Nativa'}[k] || k;
+    const top = (v.classes||[]).slice().sort((a,b)=>b.area_ha-a.area_ha).slice(0,3)
+      .map(c=>`${esc(c.classe)} ${c.pct.toFixed(0)}%`).join(', ');
+    return `<tr><td>${rot}</td><td style="text-align:right">${v.area_ha.toFixed(2)}</td><td>${top||'—'}</td></tr>`;
+  }).join('');
+  const grauCor = GRAU_COR[r.grau_conformidade] || '#999';
+
+  abrirRelatorio(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Auditoria CAR – BondGis</title><style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Segoe UI",Arial,sans-serif;background:#f4f6f8;color:#1a2530}
+  .header{background:#0a2b36;color:#fff;padding:24px 32px 20px}
+  .header .tag{background:${grauCor};color:#fff;font-size:.72em;padding:3px 10px;border-radius:12px;letter-spacing:1px;text-transform:uppercase}
+  .header h1{font-size:1.5em;margin:8px 0 4px}.header .sub{color:#a8d5c2;font-size:.9em}
+  .content{max-width:920px;margin:0 auto;padding:24px 16px 40px}
+  .scores{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 20px}
+  .sc{background:#fff;border-radius:8px;padding:12px 16px;min-width:130px;flex:1;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+  .sc .l{font-size:.72em;color:#666;text-transform:uppercase;letter-spacing:.04em}
+  .sc .v{font-size:1.8em;font-weight:800;line-height:1.1;margin-top:2px}
+  .grau{display:inline-block;padding:6px 14px;border-radius:20px;color:#fff;font-weight:700;background:${grauCor}}
+  table{border-collapse:collapse;width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-top:8px}
+  th{background:#1a7f4b;color:#fff;padding:9px 13px;text-align:left;font-size:.83em}
+  td{border-bottom:1px solid #eee;padding:8px 13px;font-size:.85em}
+  h2{color:#1a7f4b;margin:26px 0 8px}
+  .footer{text-align:center;margin-top:30px;font-size:.78em;color:#999}
+  @media print{.noprint{display:none}}
+</style></head><body>
+<div class="header"><div class="tag">Auditoria CAR</div>
+  <h1>Relatório de Auditoria Ambiental</h1>
+  <div class="sub">${esc(r.imovelNome||'Imóvel')} · ${r.area_total_ha.toFixed(2)} ha ·
+    Sentinel-2 ${r.image_date?('('+esc(r.image_date)+')'):''} × MapBiomas ${r.mapbiomas_ano}</div></div>
+<div class="content">
+  <p style="margin-bottom:10px"><span class="grau">${esc(r.grau_conformidade)}</span>
+    &nbsp; Índice Geral de Conformidade: <b style="font-size:1.3em">${s.indice_geral?.toFixed(0) ?? '—'}</b>/100</p>
+  <div class="scores">
+    ${scoreCard('Ambiental', s.ambiental)}${scoreCard('CAR', s.car)}${scoreCard('Vegetação', s.vegetacao)}
+    ${scoreCard('APP', s.app)}${scoreCard('Reserva Legal', s.reserva_legal)}
+  </div>
+  <h2>Divergências detectadas</h2>
+  <table><thead><tr><th>Tipo</th><th style="text-align:right">Área (ha)</th><th style="text-align:right">% imóvel</th><th>Risco</th></tr></thead>
+    <tbody>${divRows}</tbody></table>
+  <h2>Composição por camada do CAR</h2>
+  <table><thead><tr><th>Camada</th><th style="text-align:right">Área (ha)</th><th>Classes predominantes</th></tr></thead>
+    <tbody>${camadaRows}</tbody></table>
+  <p style="margin-top:20px" class="noprint"><button onclick="window.print()" style="padding:8px 16px;border:none;border-radius:6px;background:#1a7f4b;color:#fff;font-weight:600;cursor:pointer">Imprimir / Salvar PDF</button></p>
+  <p class="footer">Gerado por BondGis · Auditoria preliminar (índices Sentinel-2 + MapBiomas) · ${esc(agora())}</p>
+</div></body></html>`);
+}
+
 /* ── Inicialização da UI ──────────────────────────────────────────── */
 document.querySelectorAll('#tabs button').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -2370,13 +2634,17 @@ $('inp-sat-arquivo').addEventListener('change', e => {
   if(e.target.files[0]) carregarArquivoSatelite(e.target.files[0]);
   e.target.value = '';
 });
-// Datas padrão: últimos 6 meses
-(function initDatasSat(){
+// Aba Auditoria CAR
+$('btn-auditoria').addEventListener('click', executarAuditoria);
+$('rng-aud-nuvem').addEventListener('input', e => $('lbl-aud-nuvem').textContent = e.target.value);
+
+// Datas padrão: últimos 6 meses (Satélite e Auditoria)
+(function initDatas(){
   const hoje = new Date();
   const antes = new Date(); antes.setMonth(antes.getMonth() - 6);
   const iso = d => d.toISOString().slice(0, 10);
-  $('inp-sat-fim').value = iso(hoje);
-  $('inp-sat-inicio').value = iso(antes);
+  $('inp-sat-fim').value = iso(hoje);   $('inp-sat-inicio').value = iso(antes);
+  $('inp-aud-fim').value = iso(hoje);   $('inp-aud-inicio').value = iso(antes);
 })();
 atualizarStatusSatelite();
 

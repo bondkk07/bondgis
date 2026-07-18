@@ -106,3 +106,33 @@ class HealthResponse(BaseModel):
     earth_engine: bool
     project: Optional[str] = None
     message: Optional[str] = None
+
+
+# ── AUDITORIA_CAR ──────────────────────────────────────────────────────────
+class AuditoriaCamadas(BaseModel):
+    """Camadas do CAR (GeoJSON); todas opcionais exceto o imóvel."""
+    app: Optional[Dict[str, Any]] = None
+    reserva_legal: Optional[Dict[str, Any]] = None
+    uso_consolidado: Optional[Dict[str, Any]] = None
+    vegetacao_nativa: Optional[Dict[str, Any]] = None
+
+
+class AuditoriaRequest(BaseModel):
+    aoi: Dict[str, Any] = Field(..., description="GeoJSON do limite do imóvel")
+    camadas: AuditoriaCamadas = AuditoriaCamadas()
+    date_start: str
+    date_end: str
+    max_cloud: float = Field(60.0, ge=0, le=100)
+    mode: CompositeMode = CompositeMode.median
+
+
+class AuditoriaResponse(BaseModel):
+    n_images: int
+    image_date: Optional[str] = None
+    mapbiomas_ano: int
+    area_total_ha: float
+    camadas: Dict[str, Any]
+    divergencias: List[Dict[str, Any]]
+    scores: Dict[str, Optional[float]]
+    grau_conformidade: str
+    geojson_divergencias: Dict[str, Any]

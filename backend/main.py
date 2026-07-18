@@ -13,10 +13,12 @@ import logging
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+import auditoria
 import sentinel
 from config import get_settings
 from earth_engine import init_earth_engine, is_initialized
 from schemas import (
+    AuditoriaRequest, AuditoriaResponse,
     DatesRequest, DatesResponse, HealthResponse, StatsRequest, StatsResponse,
     TilesRequest, TilesResponse, TimeSeriesRequest, TimeSeriesResponse,
 )
@@ -128,6 +130,22 @@ def timeseries(req: TimeSeriesRequest) -> TimeSeriesResponse:
         logger.exception("Erro em /api/timeseries")
         raise HTTPException(status_code=500, detail=f"Erro na série temporal: {exc}")
     return TimeSeriesResponse(**data)
+
+
+@app.post("/api/auditoria", response_model=AuditoriaResponse)
+def auditoria_car(req: AuditoriaRequest) -> AuditoriaResponse:
+    _ensure_ee()
+    try:
+        data = auditoria.run_auditoria(
+            req.aoi, req.camadas.model_dump(), req.date_start, req.date_end,
+            req.max_cloud, req.mode.value,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Erro em /api/auditoria")
+        raise HTTPException(status_code=500, detail=f"Erro na auditoria: {exc}")
+    return AuditoriaResponse(**data)
 
 
 if __name__ == "__main__":

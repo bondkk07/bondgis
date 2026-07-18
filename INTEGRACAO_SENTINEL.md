@@ -89,3 +89,42 @@ Todas as mudanças são aditivas e não quebram funcionalidades anteriores:
 Área total, área com água, vegetação, agrícola, solo exposto e floresta —
 mais o percentual de cada classe e as médias dos índices na área. Um relatório
 imprimível é gerado com um clique.
+
+---
+
+# Módulo AUDITORIA_CAR
+
+Cruza automaticamente as camadas do CAR com a cobertura observada pelo
+Sentinel-2, **validada pelo MapBiomas** (asset da Coleção 10 lido no próprio
+Earth Engine), e produz um diagnóstico de conformidade.
+
+### Arquivos
+- **Backend**: `backend/auditoria.py` + endpoint `POST /api/auditoria` em
+  `main.py` (modelos em `schemas.py`).
+- **Frontend**: aba **Auditoria** (trilho de ícones) em `index.html`, com o
+  painel executivo, a camada Leaflet de divergências e os exports.
+
+### Fluxo
+1. A aba detecta automaticamente as sub-camadas do CAR já carregadas
+   (Limite do imóvel, APP, Reserva Legal, Uso Consolidado, Vegetação Nativa)
+   pelo grupo/nome.
+2. Envia o limite do imóvel + as sub-camadas ao backend.
+3. O backend classifica o Sentinel-2 (9 classes: Água, Área Úmida, Solo
+   Exposto, Agricultura, Pastagem, Vegetação Secundária, Floresta, Área
+   Queimada, Infraestrutura), valida contra o MapBiomas e detecta 9 tipos de
+   divergência: APP antropizada, APP sem vegetação, RL com déficit, RL
+   excedente, mudança de uso, supressão vegetal, expansão agrícola, corpos
+   hídricos não declarados e áreas degradadas.
+
+### Saídas
+- **Painel executivo**: Score Ambiental, Score CAR, Score Vegetação, Score
+  APP, Score Reserva Legal e Índice Geral de Conformidade, com o grau
+  (Conforme / Atenção / Divergência moderada / Divergência crítica).
+- **Camada Leaflet** das divergências, colorida por severidade
+  (verde = conforme, amarelo = atenção, laranja = moderada, vermelho = crítica).
+- **Relatório HTML** (com botão Imprimir/Salvar **PDF**), **JSON** estruturado
+  e **GeoJSON** das divergências, todos exportáveis com um clique.
+
+> As heurísticas de classificação e de divergência são **preliminares**
+> (cena única, limiares de índices) — servem como triagem, não como laudo
+> oficial. Ajuste os limiares em `auditoria.py` para a sua região.

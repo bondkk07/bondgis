@@ -128,6 +128,7 @@ A aba **Satélite** mostrará "✔ Backend online · Earth Engine ativo".
 | POST   | `/api/stats`       | Área por classe + índices médios recortados pela AOI. |
 | POST   | `/api/dates`       | Datas de imagens disponíveis no período/filtro.       |
 | POST   | `/api/timeseries`  | Série temporal (média do índice na AOI por imagem).   |
+| POST   | `/api/auditoria`   | Auditoria CAR: cruza CAR × Sentinel-2 × MapBiomas, detecta divergências, calcula scores e devolve GeoJSON das divergências. |
 
 Corpo comum (JSON):
 
