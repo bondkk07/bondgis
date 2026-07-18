@@ -114,6 +114,19 @@ header .spacer{flex:1}
 }
 .btn-cfg:hover{background:var(--surface-hover);color:var(--text);border-color:var(--border-strong)}
 .btn-cfg:active{transform:scale(.97)}
+.btn-status{
+  display:flex;align-items:center;gap:7px;height:34px;padding:0 12px;border-radius:var(--radius-md);
+  border:1px solid var(--border);background:var(--surface);color:var(--text-secondary);
+  font-size:12.5px;font-weight:600;cursor:pointer;transition:all var(--dur) var(--ease);flex-shrink:0;
+}
+.btn-status:hover{background:var(--surface-hover);color:var(--text);border-color:var(--border-strong)}
+.btn-status:active{transform:scale(.97)}
+.status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:var(--text-tertiary);transition:background .2s var(--ease)}
+.status-dot.online{background:var(--success);box-shadow:0 0 0 3px var(--success-soft)}
+.status-dot.offline{background:var(--danger);box-shadow:0 0 0 3px var(--danger-soft)}
+.status-dot.degradado{background:var(--warning);box-shadow:0 0 0 3px var(--warning-soft)}
+.status-dot.verificando{background:var(--accent);animation:pulseDot 1s ease-in-out infinite}
+@keyframes pulseDot{0%,100%{opacity:1}50%{opacity:.35}}
 .mobile-menu-btn{display:none}
 
 /* ── Layout principal ──────────────────────────────────── */
@@ -244,16 +257,34 @@ progress::-webkit-progress-value{background:linear-gradient(90deg,var(--accent),
 progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3AED);border-radius:var(--radius-full)}
 
 /* ── Modal de configurações ────────────────────────────── */
-#modal-cfg{
+#modal-cfg,#modal-status{
   display:none;position:fixed;inset:0;background:rgba(2,6,15,.6);backdrop-filter:blur(6px);
   -webkit-backdrop-filter:blur(6px);z-index:2000;align-items:center;justify-content:center;
 }
-#modal-cfg.on{display:flex;animation:modalFade .18s var(--ease)}
-#modal-cfg .box{
+#modal-cfg.on,#modal-status.on{display:flex;animation:modalFade .18s var(--ease)}
+#modal-cfg .box,#modal-status .box{
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-xl);
   padding:24px;width:min(480px,92vw);box-shadow:var(--shadow-lg);animation:modalScale .2s var(--ease);
 }
-#modal-cfg h2{font-size:15px;font-weight:700;color:var(--text);margin-bottom:14px}
+#modal-cfg h2,#modal-status h2{font-size:15px;font-weight:700;color:var(--text);margin-bottom:14px}
+#modal-status .box{width:min(560px,92vw);max-height:82vh;display:flex;flex-direction:column}
+#modal-status .status-head{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+#modal-status .status-head h2{margin-bottom:0;flex:1;min-width:0}
+#modal-status .status-head .btn{width:auto;margin-top:0;flex-shrink:0;white-space:nowrap}
+#modal-status .status-resumo{font-size:12px;color:var(--text-tertiary);margin-bottom:12px}
+#status-lista{overflow-y:auto;flex:1;min-height:0;margin:4px -6px 0;padding:0 6px}
+.status-grupo-tit{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+  color:var(--text-tertiary);margin:14px 0 6px}
+.status-grupo-tit:first-child{margin-top:0}
+.status-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-sm);
+  background:var(--surface);margin-bottom:4px;font-size:12.5px}
+.status-item .nome{flex:1;color:var(--text);min-width:0}
+.status-item .meta{font-size:10.5px;color:var(--text-tertiary);white-space:nowrap}
+.status-item .txt{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.02em;white-space:nowrap}
+.status-item .txt.online{color:var(--success)}
+.status-item .txt.offline{color:var(--danger)}
+.status-item .txt.degradado{color:var(--warning)}
+.status-item .txt.verificando{color:var(--accent)}
 @keyframes modalFade{from{opacity:0}to{opacity:1}}
 @keyframes modalScale{from{opacity:0;transform:scale(.96) translateY(6px)}to{opacity:1;transform:scale(1) translateY(0)}}
 
@@ -334,6 +365,10 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
   <button class="icon-btn" id="btn-theme" aria-label="Alternar tema" title="Alternar tema">
     <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
     <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+  </button>
+  <button class="btn-status" id="btn-status" onclick="abrirStatus()" title="Status das fontes de dados externas">
+    <span class="status-dot" id="status-dot-header"></span>
+    <span id="status-texto-header">Status</span>
   </button>
   <button class="btn-cfg" onclick="abrirCfg()">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -606,6 +641,24 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
     <div style="display:flex;gap:8px;margin-top:14px">
       <button class="btn" onclick="salvarCfg()">Salvar</button>
       <button class="btn sec" onclick="document.getElementById('modal-cfg').classList.remove('on')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL STATUS DAS FONTES DE DADOS ═════════════════ -->
+<div id="modal-status">
+  <div class="box">
+    <div class="status-head">
+      <h2>Status das fontes de dados</h2>
+      <button class="btn sec" id="btn-status-refresh" onclick="verificarTodosStatus()">↻ Verificar agora</button>
+    </div>
+    <p class="status-resumo" id="status-resumo">Verificando…</p>
+    <p class="hint" style="margin-top:0">Como dependemos de bases públicas de terceiros, quedas ou lentidão
+      nesses serviços podem causar dados incompletos ou inconsistentes numa análise — confira aqui antes de
+      desconfiar do resultado. Cada item testa se o servidor responde (não valida a consulta específica).</p>
+    <div id="status-lista"></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn sec" onclick="document.getElementById('modal-status').classList.remove('on')">Fechar</button>
     </div>
   </div>
 </div>
@@ -2114,6 +2167,134 @@ function salvarCfg(){
   atualizarStatusSatelite();
 }
 
+/* ══ STATUS DAS FONTES DE DADOS EXTERNAS ═════════════════════════════════
+   Como o sistema depende de bases públicas de terceiros (SICAR, MapBiomas,
+   INPE, IBAMA, FUNAI…), quedas ou lentidão nesses serviços são a causa mais
+   comum de resultado incompleto/inconsistente numa análise. Este painel
+   testa, em tempo real, se cada fonte responde — um "ping" via fetch em
+   modo no-cors: não lemos o conteúdo (a maioria não libera CORS para
+   requisições simples do navegador), só se a rede respondeu ou não.
+   Isso mede alcançabilidade do host, não valida a consulta específica. */
+const FONTES_STATUS = [
+  {id:'sicar_area',     nome:'SICAR — Área do Imóvel',            grupo:'Importação CAR',   url: 'https://geoserver.car.gov.br'},
+  {id:'sicar_consulta', nome:'SICAR — Camadas subsidiárias',       grupo:'Importação CAR',   url: 'https://consulta.car.gov.br'},
+  {id:'mapbiomas',      nome:'MapBiomas (Google Cloud Storage)',   grupo:'MapBiomas',        url: 'https://storage.googleapis.com/mapbiomas-public/'},
+  {id:'backend_ee',     nome:'Backend / Google Earth Engine',      grupo:'Satélite & Análise', especial:'backend'},
+  {id:'ibama',          nome:'IBAMA — Embargos',                  grupo:'Camadas Externas',  url: 'https://pamgia.ibama.gov.br'},
+  {id:'funai',          nome:'FUNAI — Terras Indígenas',           grupo:'Camadas Externas',  url: 'https://geoserver.funai.gov.br'},
+  {id:'iphan',          nome:'IPHAN — Sítios Arqueológicos',       grupo:'Camadas Externas',  url: 'https://geoserver.iphan.gov.br'},
+  {id:'ibge',           nome:'IBGE — Malha Municipal',             grupo:'Camadas Externas',  url: 'https://geoservicos.ibge.gov.br'},
+  {id:'sema_mt',        nome:'SEMA-MT — APF / Embargos',           grupo:'Camadas Externas',  url: 'https://geo.sema.mt.gov.br'},
+  {id:'icmbio',         nome:'ICMBio — Embargos / Autos (INDE)',   grupo:'Camadas Externas',  url: 'https://geoservicos.inde.gov.br'},
+  {id:'sfb',            nome:'SFB — Florestas Públicas',           grupo:'Camadas Externas',  url: 'https://smapas.florestal.gov.br'},
+  {id:'inpe_prodes',    nome:'INPE / PRODES (Terrabrasilis)',      grupo:'Alertas / PRODES',  url: 'https://terrabrasilis.dpi.inpe.br'},
+  {id:'embrapa',        nome:'EMBRAPA — Áreas Atribuídas',         grupo:'Camadas Externas',  url: 'https://geoinfo.dados.embrapa.br'},
+  {id:'eox',            nome:'EOX — Mosaicos Sentinel-2',          grupo:'Mosaicos',          url: 'https://tiles.maps.eox.at'},
+  {id:'sedam_ro',       nome:'SEDAM-RO — ZSEE',                    grupo:'Camadas Externas',  url: 'https://geoportal.sedam.ro.gov.br'},
+  {id:'mma_mcr',        nome:'MMA — Listas MCR/PRODES',            grupo:'Sobreposição',      url: 'https://labdez.mma.gov.br'},
+];
+let statusFontes = {};   // id -> {status:'verificando'|'online'|'offline'|'degradado', ms, detalhe}
+
+async function pingFonte(url, timeoutMs=7000){
+  const inicio = performance.now();
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), timeoutMs);
+  try{
+    // no-cors: não conseguimos ler a resposta, mas a promise só resolve se
+    // a rede de fato respondeu (DNS + conexão + handshake ok).
+    await fetch(url, {mode:'no-cors', cache:'no-store', signal: ctl.signal});
+    return {status:'online', ms: Math.round(performance.now() - inicio)};
+  } catch(e){
+    const motivo = e.name === 'AbortError' ? 'tempo esgotado' : 'sem resposta';
+    return {status:'offline', ms: Math.round(performance.now() - inicio), detalhe: motivo};
+  } finally { clearTimeout(t); }
+}
+
+async function pingBackend(){
+  if(!cfg.apiBase) return {status:'offline', detalhe:'Backend não configurado em Configurações'};
+  const inicio = performance.now();
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 8000);
+  try{
+    const resp = await fetch(cfg.apiBase + '/api/health', {signal: ctl.signal, cache:'no-store'});
+    const ms = Math.round(performance.now() - inicio);
+    const h = await resp.json();
+    if(h.earth_engine) return {status:'online', ms, detalhe:`Earth Engine ativo (projeto ${h.project||'?'})`};
+    return {status:'degradado', ms, detalhe: h.message || 'Earth Engine não inicializado'};
+  } catch(e){
+    return {status:'offline', ms: Math.round(performance.now() - inicio), detalhe:'Backend inacessível'};
+  } finally { clearTimeout(t); }
+}
+
+async function verificarFonte(f){
+  statusFontes[f.id] = {status:'verificando'};
+  renderStatusFontes();
+  const resultado = f.especial === 'backend' ? await pingBackend() : await pingFonte(f.url);
+  statusFontes[f.id] = resultado;
+  renderStatusFontes();
+}
+
+async function verificarTodosStatus(){
+  const btn = $('btn-status-refresh');
+  if(btn) btn.disabled = true;
+  await Promise.allSettled(FONTES_STATUS.map(f => verificarFonte(f)));
+  if(btn) btn.disabled = false;
+}
+
+function renderStatusFontes(){
+  const grupos = {};
+  for(const f of FONTES_STATUS) (grupos[f.grupo] ??= []).push(f);
+
+  let html = '';
+  for(const [grupo, fontes] of Object.entries(grupos)){
+    html += `<div class="status-grupo-tit">${esc(grupo)}</div>`;
+    for(const f of fontes){
+      const r = statusFontes[f.id] || {status:'verificando'};
+      const rotulo = {online:'Online', offline:'Fora do ar', degradado:'Degradado', verificando:'Verificando…'}[r.status];
+      html += `<div class="status-item">
+        <span class="status-dot ${r.status}"></span>
+        <span class="nome">${esc(f.nome)}${r.detalhe ? ` <span class="meta">· ${esc(r.detalhe)}</span>` : ''}</span>
+        ${r.ms != null ? `<span class="meta">${r.ms} ms</span>` : ''}
+        <span class="txt ${r.status}">${rotulo}</span>
+      </div>`;
+    }
+  }
+  const lista = $('status-lista');
+  if(lista) lista.innerHTML = html;
+
+  // resumo + badge do header
+  const total = FONTES_STATUS.length;
+  const vals = Object.values(statusFontes);
+  const online = vals.filter(v => v.status === 'online').length;
+  const offline = vals.filter(v => v.status === 'offline').length;
+  const verificando = vals.filter(v => v.status === 'verificando').length;
+  const resumo = $('status-resumo');
+  if(resumo){
+    resumo.textContent = verificando > 0
+      ? `Verificando ${verificando} de ${total}…`
+      : `${online} de ${total} fontes online` + (offline ? ` · ${offline} fora do ar` : '');
+  }
+
+  const dotHeader = $('status-dot-header'), txtHeader = $('status-texto-header');
+  if(dotHeader && txtHeader){
+    let classe = 'verificando', texto = 'Status';
+    if(vals.length === total && verificando === 0){
+      classe = offline > 0 ? (offline >= total/2 ? 'offline' : 'degradado') : 'online';
+      texto = `${online}/${total}`;
+    }
+    dotHeader.className = 'status-dot ' + classe;
+    txtHeader.textContent = texto;
+  }
+}
+
+function abrirStatus(){
+  $('modal-status').classList.add('on');
+  renderStatusFontes();
+  // só reconsulta se nunca verificou ou faz mais de 60s da última rodada
+  const jaVerificou = Object.keys(statusFontes).length === FONTES_STATUS.length;
+  if(!jaVerificou) verificarTodosStatus();
+}
+
 /* ══ Satélite — integração Sentinel-2 via backend Earth Engine ══════════
    O frontend nunca vê credenciais: envia a AOI (GeoJSON) + filtros ao
    backend FastAPI e recebe URLs de tiles já assinadas ou estatísticas.
@@ -2687,6 +2868,9 @@ atualizarStatusSatelite();
 
 montarCatalogo();
 atualizarUICamadas();
+// Verificação inicial em segundo plano — o badge de status já reflete a
+// realidade sem exigir que o usuário abra o painel manualmente.
+setTimeout(verificarTodosStatus, 1200);
 </script>
 </body>
 </html>
