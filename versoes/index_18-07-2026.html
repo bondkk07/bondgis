@@ -691,27 +691,61 @@ const CAMPOS_CAR_ATRIBUTO = ['cod_imovel','COD_IMOVEL','codImovel','inscricao','
 const SICAR_AREA_WFS_URL     = 'https://geoserver.car.gov.br/geoserver/sicar/ows';
 const SICAR_CONSULTA_WFS_URL = 'https://consulta.car.gov.br/geoserver/ows';
 
+// Conjunto COMPLETO das camadas temáticas do CAR publicadas em
+// consulta.car.gov.br (confirmado via GetCapabilities). Todas filtráveis por
+// cod_imovel. Camadas ausentes num dado imóvel voltam vazias e são ignoradas
+// — por isso é seguro consultar todas.
 const CAMADAS_CONSULTA = [
-  {typeName:'consulta_publica:ast',                                rotulo:'Área do Imóvel (AST)',                  grupo:'AREA_IMOVEL'},
-  {typeName:'consulta_publica:vegetacao_nativa',                   rotulo:'Vegetação Nativa',                      grupo:'VEGETACAO_NATIVA'},
-  {typeName:'consulta_publica:arl_proposta',                       rotulo:'Reserva Legal Proposta',                grupo:'RESERVA_LEGAL'},
-  {typeName:'consulta_publica:arl_averbada',                       rotulo:'Reserva Legal Averbada',                grupo:'RESERVA_LEGAL'},
-  {typeName:'consulta_publica:arl_aprovada_nao_averbada',          rotulo:'Reserva Legal Aprovada (não averbada)', grupo:'RESERVA_LEGAL'},
-  {typeName:'consulta_publica:app_rio_ate_10',                     rotulo:'APP – Rio até 10 m',                    grupo:'APP'},
-  {typeName:'consulta_publica:app_rio_10_a_50',                    rotulo:'APP – Rio 10 a 50 m',                   grupo:'APP'},
-  {typeName:'consulta_publica:app_rio_50_a_200',                   rotulo:'APP – Rio 50 a 200 m',                  grupo:'APP'},
-  {typeName:'consulta_publica:app_rio_200_a_600',                  rotulo:'APP – Rio 200 a 600 m',                 grupo:'APP'},
-  {typeName:'consulta_publica:app_rio_acima_600',                  rotulo:'APP – Rio acima de 600 m',              grupo:'APP'},
-  {typeName:'consulta_publica:app_nascente_olho_dagua',            rotulo:"APP – Nascente / olho d'água",          grupo:'APP'},
-  {typeName:'consulta_publica:app_lago_natural',                   rotulo:'APP – Lago natural',                    grupo:'APP'},
-  {typeName:'consulta_publica:app_borda_chapada',                  rotulo:'APP – Borda de chapada',                grupo:'APP'},
-  {typeName:'consulta_publica:app_area_declividade_maior_45',      rotulo:'APP – Declividade > 45°',               grupo:'APP'},
-  {typeName:'consulta_publica:app_area_topo_morro',                rotulo:'APP – Topo de morro',                   grupo:'APP'},
-  {typeName:'consulta_publica:area_uso_restrito_declividade_25_a_45', rotulo:'Uso Restrito – Declividade 25–45°',  grupo:'USO_RESTRITO'},
-  {typeName:'consulta_publica:area_uso_restrito_pantaneira',       rotulo:'Uso Restrito – Pantaneira',             grupo:'USO_RESTRITO'},
-  {typeName:'consulta_publica:area_consolidada',                   rotulo:'Área Consolidada',                      grupo:'OUTRO'},
-  {typeName:'consulta_publica:area_embargada',                     rotulo:'Área Embargada',                        grupo:'OUTRO'},
-  {typeName:'consulta_publica:area_servidao_administrativa_total', rotulo:'Servidão Administrativa',               grupo:'OUTRO'},
+  // Área do imóvel
+  {typeName:'consulta_publica:ast', rotulo:'Área do Imóvel (AST)', grupo:'AREA_IMOVEL'},
+  // Vegetação nativa / remanescentes
+  {typeName:'consulta_publica:vegetacao_nativa', rotulo:'Vegetação Nativa', grupo:'VEGETACAO_NATIVA'},
+  // Reserva Legal (3 situações)
+  {typeName:'consulta_publica:arl_proposta', rotulo:'Reserva Legal Proposta', grupo:'RESERVA_LEGAL'},
+  {typeName:'consulta_publica:arl_averbada', rotulo:'Reserva Legal Averbada', grupo:'RESERVA_LEGAL'},
+  {typeName:'consulta_publica:arl_aprovada_nao_averbada', rotulo:'Reserva Legal Aprovada (não averbada)', grupo:'RESERVA_LEGAL'},
+  // APP (todos os tipos)
+  {typeName:'consulta_publica:app_rio_ate_10', rotulo:'APP – Rio até 10 m', grupo:'APP'},
+  {typeName:'consulta_publica:app_rio_10_a_50', rotulo:'APP – Rio 10 a 50 m', grupo:'APP'},
+  {typeName:'consulta_publica:app_rio_50_a_200', rotulo:'APP – Rio 50 a 200 m', grupo:'APP'},
+  {typeName:'consulta_publica:app_rio_200_a_600', rotulo:'APP – Rio 200 a 600 m', grupo:'APP'},
+  {typeName:'consulta_publica:app_rio_acima_600', rotulo:'APP – Rio acima de 600 m', grupo:'APP'},
+  {typeName:'consulta_publica:app_nascente_olho_dagua', rotulo:"APP – Nascente / olho d'água", grupo:'APP'},
+  {typeName:'consulta_publica:app_lago_natural', rotulo:'APP – Lago natural', grupo:'APP'},
+  {typeName:'consulta_publica:app_vereda', rotulo:'APP – Vereda', grupo:'APP'},
+  {typeName:'consulta_publica:app_banhado', rotulo:'APP – Banhado', grupo:'APP'},
+  {typeName:'consulta_publica:app_manguezal', rotulo:'APP – Manguezal', grupo:'APP'},
+  {typeName:'consulta_publica:app_restinga', rotulo:'APP – Restinga', grupo:'APP'},
+  {typeName:'consulta_publica:app_borda_chapada', rotulo:'APP – Borda de chapada', grupo:'APP'},
+  {typeName:'consulta_publica:app_area_topo_morro', rotulo:'APP – Topo de morro', grupo:'APP'},
+  {typeName:'consulta_publica:app_area_declividade_maior_45', rotulo:'APP – Declividade > 45°', grupo:'APP'},
+  {typeName:'consulta_publica:app_area_altitude_superior_1800', rotulo:'APP – Altitude > 1800 m', grupo:'APP'},
+  {typeName:'consulta_publica:app_reservatorio_artificial_decorrente_barramento', rotulo:'APP – Reservatório artificial', grupo:'APP'},
+  {typeName:'consulta_publica:app_reservatorio_geracao_energia_ate_24_08_2001', rotulo:'APP – Reservatório energia (até 2001)', grupo:'APP'},
+  // Uso restrito
+  {typeName:'consulta_publica:area_uso_restrito_declividade_25_a_45', rotulo:'Uso Restrito – Declividade 25–45°', grupo:'USO_RESTRITO'},
+  {typeName:'consulta_publica:area_uso_restrito_pantaneira', rotulo:'Uso Restrito – Pantaneira', grupo:'USO_RESTRITO'},
+  {typeName:'consulta_publica:area_declividade_maior_45', rotulo:'Área Declividade > 45°', grupo:'USO_RESTRITO'},
+  {typeName:'consulta_publica:area_topo_morro', rotulo:'Área Topo de morro', grupo:'USO_RESTRITO'},
+  {typeName:'consulta_publica:area_altitude_superior_1800', rotulo:'Área Altitude > 1800 m', grupo:'USO_RESTRITO'},
+  // Área consolidada / servidão / demais áreas declaradas
+  {typeName:'consulta_publica:area_consolidada', rotulo:'Área Consolidada', grupo:'OUTRO'},
+  {typeName:'consulta_publica:area_servidao_administrativa_total', rotulo:'Servidão Administrativa', grupo:'OUTRO'},
+  {typeName:'consulta_publica:area_pousio', rotulo:'Área de Pousio', grupo:'OUTRO'},
+  {typeName:'consulta_publica:area_utilidade_publica', rotulo:'Utilidade Pública', grupo:'OUTRO'},
+  {typeName:'consulta_publica:area_infraestrutura_publica', rotulo:'Infraestrutura Pública', grupo:'OUTRO'},
+  {typeName:'consulta_publica:area_entorno_reservatorio_energia', rotulo:'Entorno de Reservatório (energia)', grupo:'OUTRO'},
+  {typeName:'consulta_publica:area_embargada', rotulo:'Área Embargada', grupo:'OUTRO'},
+  // Hidrografia declarada no imóvel
+  {typeName:'consulta_publica:rio_ate_10', rotulo:'Hidrografia – Rio até 10 m', grupo:'HIDROGRAFIA'},
+  {typeName:'consulta_publica:rio_10_a_50', rotulo:'Hidrografia – Rio 10 a 50 m', grupo:'HIDROGRAFIA'},
+  {typeName:'consulta_publica:rio_50_a_200', rotulo:'Hidrografia – Rio 50 a 200 m', grupo:'HIDROGRAFIA'},
+  {typeName:'consulta_publica:rio_200_a_600', rotulo:'Hidrografia – Rio 200 a 600 m', grupo:'HIDROGRAFIA'},
+  {typeName:'consulta_publica:rio_acima_600', rotulo:'Hidrografia – Rio acima de 600 m', grupo:'HIDROGRAFIA'},
+  {typeName:'consulta_publica:nascente_olho_dagua', rotulo:"Hidrografia – Nascente / olho d'água", grupo:'HIDROGRAFIA'},
+  {typeName:'consulta_publica:lago_natural', rotulo:'Hidrografia – Lago natural', grupo:'HIDROGRAFIA'},
+  {typeName:'consulta_publica:vereda', rotulo:'Hidrografia – Vereda', grupo:'HIDROGRAFIA'},
+  {typeName:'consulta_publica:banhado', rotulo:'Hidrografia – Banhado', grupo:'HIDROGRAFIA'},
 ];
 
 const CAMADAS_EXTERNAS = [
@@ -960,17 +994,46 @@ function toast(msg, type='info', ms=5000){
 function withProxy(url){
   return cfg.proxy ? cfg.proxy + encodeURIComponent(url) : url;
 }
+// Resolve a URL de fetch para consultas WFS/ArcGIS. Muitos GeoServers de
+// governo (SICAR consulta, FUNAI, IPHAN…) NÃO enviam CORS, então o navegador
+// bloqueia o acesso direto. Ordem: proxy manual (override) → proxy do backend
+// (/api/proxy, resolve CORS) → direto (só funciona se a fonte tiver CORS).
+function urlParaFetch(url){
+  if(cfg.proxy) return cfg.proxy + encodeURIComponent(url);
+  if(cfg.apiBase) return cfg.apiBase + '/api/proxy?url=' + encodeURIComponent(url);
+  return url;
+}
 async function fetchJson(url, timeoutMs=60000){
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), timeoutMs);
   try{
-    const resp = await fetch(withProxy(url), {signal:ctl.signal});
+    const resp = await fetch(urlParaFetch(url), {signal:ctl.signal});
     if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const raw = await resp.text();
     if(raw.trimStart().startsWith('<'))
       throw new Error('Servidor retornou XML; verifique a URL/typeName.');
     return JSON.parse(raw);
   } finally { clearTimeout(t); }
+}
+// fetchJson com retentativas — protege contra a instabilidade do SICAR e de
+// outros GeoServers públicos. Não repete erros de configuração (XML/typeName).
+async function fetchJsonRetry(url, {tentativas=3, timeoutMs=45000, backoffMs=700}={}){
+  let ultimo;
+  for(let t = 0; t < tentativas; t++){
+    try{ return await fetchJson(url, timeoutMs); }
+    catch(e){
+      ultimo = e;
+      if(/XML|typeName/i.test(e.message)) throw e;      // erro de config, não instabilidade
+      if(t < tentativas - 1) await new Promise(r => setTimeout(r, backoffMs * (t + 1)));
+    }
+  }
+  throw ultimo;
+}
+// Executa tarefas assíncronas com limite de concorrência (gentil com o SICAR).
+async function comConcorrencia(itens, limite, worker){
+  let idx = 0;
+  async function run(){ while(idx < itens.length){ const i = idx++; await worker(itens[i], i); } }
+  await Promise.all(Array.from({length: Math.min(limite, itens.length)}, run));
 }
 function logTo(id, msg, limpar=false){
   const el = $(id);
@@ -1142,20 +1205,31 @@ async function buscarSicar(){
     adicionarCamadaVetorial('CAR_Área do Imóvel', geojson, 'AREA_IMOVEL');
     logTo('log-car', `✔ Área do Imóvel carregada (${geojson.features.length} feição/ões).`);
 
-    let ok = 0;
-    for(let i = 0; i < CAMADAS_CONSULTA.length; i++){
-      const cam = CAMADAS_CONSULTA[i];
-      logTo('log-car', `[${i+1}/${CAMADAS_CONSULTA.length}] ${cam.rotulo}...`);
+    logTo('log-car', `Buscando ${CAMADAS_CONSULTA.length} camadas do CAR (com retentativa automática)...`);
+    let carregadas = 0, vazias = 0, concluidas = 0;
+    const falharam = [];
+    await comConcorrencia(CAMADAS_CONSULTA, 4, async (cam) => {
       try{
-        const gj = await fetchJson(
+        const gj = await fetchJsonRetry(
           wfsCarUrl(SICAR_CONSULTA_WFS_URL, cam.typeName, '2.0.0', codigo));
         if(gj.features?.length){
           adicionarCamadaVetorial(`CAR_${cam.rotulo}`, gj, cam.grupo, false);
-          ok++;
-        }
-      } catch(e){ logTo('log-car', `   ⚠ ${cam.rotulo}: ${e.message}`); }
+          carregadas++;
+        } else { vazias++; }
+      } catch(e){ falharam.push(cam.rotulo); }
+      concluidas++;
+      logTo('log-car', `[${concluidas}/${CAMADAS_CONSULTA.length}] ${carregadas} carregada(s) · ${vazias} vazia(s) · ${falharam.length} falha(s)`);
+    });
+
+    logTo('log-car', `✔ Concluído: ${carregadas} camada(s) com feições, ${vazias} vazia(s) (não constam neste CAR).`);
+    if(falharam.length){
+      logTo('log-car', `⚠ ${falharam.length} camada(s) NÃO vieram por instabilidade do SICAR (falharam mesmo após retentativas):`);
+      falharam.forEach(r => logTo('log-car', `   • ${r}`));
+      logTo('log-car', '→ Clique em "Buscar" novamente para tentar recarregar apenas o que faltou.');
+      toast(`${falharam.length} camada(s) do CAR não carregaram por instabilidade do SICAR. Tente novamente.`, 'warn', 9000);
+    } else {
+      toast(`CAR importado: ${carregadas} camada(s) carregada(s).`, 'success');
     }
-    logTo('log-car', `✔ Concluído: ${ok} camada(s) subsidiária(s) com feições.`);
   } catch(e){
     logTo('log-car', `✖ ${e.message}`);
     logTo('log-car', 'Dica: falhas de rede geralmente são CORS — configure um proxy em Configurações.');
@@ -2028,17 +2102,19 @@ async function analisarAutomaticamente(){
 
       logTo('log-auto', `[${i+1}/${codigos.length}] ${codigo}: buscando camadas subsidiárias...`);
       let nCamadas = 0;
-      for(const cam of CAMADAS_CONSULTA){
+      const falharamCam = [];
+      await comConcorrencia(CAMADAS_CONSULTA, 4, async (cam) => {
         try{
-          const gj = await fetchJson(
+          const gj = await fetchJsonRetry(
             wfsCarUrl(SICAR_CONSULTA_WFS_URL, cam.typeName, '2.0.0', codigo));
           if(gj.features?.length){
             adicionarCamadaVetorial(`CAR_${codigo}_${cam.rotulo}`, gj, cam.grupo, false);
             nCamadas++;
           }
-        } catch(e){ logTo('log-auto', `   ⚠ ${cam.rotulo}: ${e.message}`); }
-      }
-      logTo('log-auto', `   ✔ ${nCamadas} camada(s) subsidiária(s).`);
+        } catch(e){ falharamCam.push(cam.rotulo); }
+      });
+      logTo('log-auto', `   ✔ ${nCamadas} camada(s) subsidiária(s)` +
+        (falharamCam.length ? ` · ⚠ ${falharamCam.length} falha(s) SICAR` : '') + '.');
 
       const geomImovel = unirFeatures(featuresPoligonais(item.geojson));
       if(!geomImovel) throw new Error('Geometria do imóvel inválida.');

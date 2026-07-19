@@ -9,9 +9,39 @@ assinadas pelo Earth Engine ou estatísticas numéricas — nenhuma credencial
 trafega para o frontend.
 """
 import logging
+import ssl
+from urllib.parse import urlparse
 
-from fastapi import FastAPI, HTTPException
+import requests
+import urllib3
+from requests.adapters import HTTPAdapter
+from urllib3.util.ssl_ import create_urllib3_context
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+class _LegacyTLSAdapter(HTTPAdapter):
+    """Habilita cifras/TLS legados que vários GeoServers gov-br exigem e que o
+    OpenSSL 3.x do Python recusa por padrão (SSLV3_ALERT_HANDSHAKE_FAILURE).
+    Navegadores e curl aceitam; o requests precisa deste ajuste."""
+    def init_poolmanager(self, *args, **kwargs):
+        ctx = create_urllib3_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        try:
+            ctx.set_ciphers("DEFAULT@SECLEVEL=1")
+        except ssl.SSLError:
+            pass
+        kwargs["ssl_context"] = ctx
+        return super().init_poolmanager(*args, **kwargs)
+
+
+# Sessão de fallback para hosts com TLS legado (dados públicos da allowlist).
+_legacy_session = requests.Session()
+_legacy_session.mount("https://", _LegacyTLSAdapter())
 
 import analise
 import sentinel
@@ -25,6 +55,20 @@ from schemas import (
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("bondgis.api")
+
+# Hosts públicos autorizados no /api/proxy. Muitos GeoServers de governo
+# (SICAR consulta, FUNAI, IPHAN, INPE…) não enviam cabeçalhos CORS, então o
+# navegador bloqueia o acesso direto. O backend busca server-side (sem CORS)
+# e devolve com os cabeçalhos CORS corretos. Allowlist evita proxy aberto/SSRF.
+ALLOWED_PROXY_HOSTS = {
+    "consulta.car.gov.br", "geoserver.car.gov.br",
+    "geoserver.funai.gov.br", "geoserver.iphan.gov.br",
+    "geoservicos.ibge.gov.br", "geo.sema.mt.gov.br",
+    "geoservicos.inde.gov.br", "smapas.florestal.gov.br",
+    "terrabrasilis.dpi.inpe.br", "geoinfo.dados.embrapa.br",
+    "geoportal.sedam.ro.gov.br", "labdez.mma.gov.br",
+    "pamgia.ibama.gov.br", "tiles.maps.eox.at",
+}
 
 settings = get_settings()
 app = FastAPI(title="BondGis — Earth Engine API", version="1.0.0")
@@ -57,6 +101,34 @@ def _ensure_ee() -> None:
                 status_code=503,
                 detail=f"Earth Engine não inicializado: {exc}",
             )
+
+
+@app.get("/api/proxy")
+def proxy(url: str = Query(..., description="URL pública (host na allowlist) a repassar")):
+    """Proxy CORS para GeoServers públicos que não enviam cabeçalhos CORS.
+    Resolve o problema de o navegador bloquear as camadas subsidiárias do
+    SICAR (consulta.car.gov.br) e demais fontes. Só repassa hosts da allowlist."""
+    host = (urlparse(url).hostname or "").lower()
+    if host not in ALLOWED_PROXY_HOSTS:
+        raise HTTPException(status_code=403, detail=f"Host não autorizado no proxy: {host}")
+    headers = {"User-Agent": "BondGis/1.0"}
+    try:
+        r = requests.get(url, timeout=60, headers=headers)
+    except requests.exceptions.SSLError:
+        # Cadeia/handshake SSL incompatível (comum em GeoServers gov-br).
+        # Refaz pela sessão de TLS legado. Hosts são todos da allowlist,
+        # públicos e sem credenciais — risco baixo.
+        try:
+            r = _legacy_session.get(url, timeout=60, headers=headers, verify=False)
+        except requests.RequestException as exc:
+            raise HTTPException(status_code=502, detail=f"Falha ao acessar a fonte: {exc}")
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"Falha ao acessar a fonte: {exc}")
+    return Response(
+        content=r.content,
+        status_code=r.status_code,
+        media_type=r.headers.get("content-type", "application/octet-stream"),
+    )
 
 
 @app.get("/api/health", response_model=HealthResponse)
