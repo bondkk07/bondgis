@@ -1,0 +1,8 @@
+# Não enviar para a imagem do Cloud Run.
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+.env
+*.json
+service-account-key.json

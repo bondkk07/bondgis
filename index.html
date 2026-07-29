@@ -960,9 +960,18 @@ const state = {
   resultadoSobrep: null,
   resultadoAnalise: null,
 };
+// Backend padrão: em localhost usa o backend local (dev); publicado, usa o
+// serviço no Cloud Run. O usuário pode sobrescrever em ⚙ Configurações.
+const API_PADRAO = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+  ? 'http://localhost:8000'
+  : 'https://bondgis-backend-68534915010.southamerica-east1.run.app';
+let _apiSalvo = localStorage.getItem('bondgis_api') || '';
+// Um backend localhost salvo é inútil no site publicado — usa o padrão.
+if(_apiSalvo && /localhost|127\.0\.0\.1/.test(_apiSalvo) && !API_PADRAO.includes('localhost'))
+  _apiSalvo = '';
 let cfg = {
   proxy: localStorage.getItem('lyssa_proxy') || '',
-  apiBase: localStorage.getItem('bondgis_api') || 'http://localhost:8000',
+  apiBase: _apiSalvo || API_PADRAO,
 };
 
 /* ── Mapa ─────────────────────────────────────────────────────────── */
