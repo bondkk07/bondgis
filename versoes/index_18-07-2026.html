@@ -655,7 +655,10 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
     <p class="status-resumo" id="status-resumo">Verificando…</p>
     <p class="hint" style="margin-top:0">Como dependemos de bases públicas de terceiros, quedas ou lentidão
       nesses serviços podem causar dados incompletos ou inconsistentes numa análise — confira aqui antes de
-      desconfiar do resultado. Cada item testa se o servidor responde (não valida a consulta específica).</p>
+      desconfiar do resultado. Testa apenas se o servidor responde (não valida a consulta específica).
+      Com o <b>backend no ar</b>, as fontes são checadas pelo mesmo caminho que o app usa (proxy do
+      backend) — resultado confiável. <b>Sem o backend</b>, a checagem é direta no navegador e pode marcar
+      como "fora do ar" servidores que na verdade estão no ar (falso negativo por CORS/TLS).</p>
     <div id="status-lista"></div>
     <div style="display:flex;gap:8px;margin-top:14px">
       <button class="btn sec" onclick="document.getElementById('modal-status').classList.remove('on')">Fechar</button>
@@ -2302,10 +2305,42 @@ async function pingBackend(){
   } finally { clearTimeout(t); }
 }
 
-async function verificarFonte(f){
+// Hosts que o app acessa VIA proxy do backend (espelha a allowlist do backend).
+// Um ping no-cors do navegador nesses hosts dá falso negativo (TLS/redirect),
+// então, quando o backend está no ar, o status vem dele (caminho real do app).
+const HOSTS_VIA_BACKEND = new Set(['consulta.car.gov.br','geoserver.car.gov.br',
+  'geoserver.funai.gov.br','geoserver.iphan.gov.br','geoservicos.ibge.gov.br',
+  'geo.sema.mt.gov.br','geoservicos.inde.gov.br','smapas.florestal.gov.br',
+  'terrabrasilis.dpi.inpe.br','geoinfo.dados.embrapa.br','geoportal.sedam.ro.gov.br',
+  'labdez.mma.gov.br','pamgia.ibama.gov.br','tiles.maps.eox.at']);
+function hostDe(url){ try{ return new URL(url).hostname.toLowerCase(); } catch{ return ''; } }
+
+async function pingViaBackend(url){
+  const inicio = performance.now();
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 22000);
+  try{
+    const resp = await fetch(cfg.apiBase + '/api/ping?url=' + encodeURIComponent(url),
+      {signal: ctl.signal, cache:'no-store'});
+    const j = await resp.json();
+    if(j.online) return {status:'online', ms: j.ms, detalhe:`via backend · HTTP ${j.status}`};
+    return {status:'offline', ms: j.ms, detalhe: j.detalhe || 'sem resposta (via backend)'};
+  } catch(e){
+    return {status:'offline', ms: Math.round(performance.now() - inicio), detalhe:'backend não respondeu'};
+  } finally { clearTimeout(t); }
+}
+
+async function verificarFonte(f, backendOnline=false){
   statusFontes[f.id] = {status:'verificando'};
   renderStatusFontes();
-  const resultado = f.especial === 'backend' ? await pingBackend() : await pingFonte(f.url);
+  let resultado;
+  if(f.especial === 'backend'){
+    resultado = await pingBackend();
+  } else if(backendOnline && cfg.apiBase && HOSTS_VIA_BACKEND.has(hostDe(f.url))){
+    resultado = await pingViaBackend(f.url);
+  } else {
+    resultado = await pingFonte(f.url);            // no-cors (MapBiomas tem CORS; ou fallback sem backend)
+  }
   statusFontes[f.id] = resultado;
   renderStatusFontes();
 }
@@ -2313,7 +2348,13 @@ async function verificarFonte(f){
 async function verificarTodosStatus(){
   const btn = $('btn-status-refresh');
   if(btn) btn.disabled = true;
-  await Promise.allSettled(FONTES_STATUS.map(f => verificarFonte(f)));
+  // 1. Backend primeiro — define se dá para checar os demais pelo caminho real.
+  const fBackend = FONTES_STATUS.find(f => f.especial === 'backend');
+  if(fBackend) await verificarFonte(fBackend);
+  const backendOnline = statusFontes[fBackend?.id]?.status === 'online';
+  // 2. Demais fontes (via backend quando possível; senão, ping no-cors direto).
+  await Promise.allSettled(
+    FONTES_STATUS.filter(f => f.especial !== 'backend').map(f => verificarFonte(f, backendOnline)));
   if(btn) btn.disabled = false;
 }
 

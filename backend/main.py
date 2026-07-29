@@ -103,32 +103,63 @@ def _ensure_ee() -> None:
             )
 
 
+def _fetch_allowlisted(url: str, timeout: int = 60,
+                       allow_redirects: bool = True) -> requests.Response:
+    """GET server-side com fallback de TLS legado. Valida a allowlist e
+    levanta HTTPException(403/502). Compartilhado por /api/proxy e /api/ping.
+    O ping usa allow_redirects=False: qualquer resposta HTTP (mesmo 3xx) já
+    prova que o servidor está no ar, e evita seguir redirects quebrados
+    (ex.: geoserver.car.gov.br 301 → HTTP:80 inacessível)."""
+    host = (urlparse(url).hostname or "").lower()
+    if host not in ALLOWED_PROXY_HOSTS:
+        raise HTTPException(status_code=403, detail=f"Host não autorizado: {host}")
+    headers = {"User-Agent": "BondGis/1.0"}
+    try:
+        return requests.get(url, timeout=timeout, headers=headers, allow_redirects=allow_redirects)
+    except requests.exceptions.SSLError:
+        # Cadeia/handshake SSL incompatível (comum em GeoServers gov-br).
+        # Refaz pela sessão de TLS legado. Hosts públicos da allowlist, sem
+        # credenciais — risco baixo.
+        try:
+            return _legacy_session.get(url, timeout=timeout, headers=headers,
+                                       allow_redirects=allow_redirects, verify=False)
+        except requests.RequestException as exc:
+            raise HTTPException(status_code=502, detail=f"Falha ao acessar a fonte: {exc}")
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"Falha ao acessar a fonte: {exc}")
+
+
 @app.get("/api/proxy")
 def proxy(url: str = Query(..., description="URL pública (host na allowlist) a repassar")):
     """Proxy CORS para GeoServers públicos que não enviam cabeçalhos CORS.
     Resolve o problema de o navegador bloquear as camadas subsidiárias do
     SICAR (consulta.car.gov.br) e demais fontes. Só repassa hosts da allowlist."""
-    host = (urlparse(url).hostname or "").lower()
-    if host not in ALLOWED_PROXY_HOSTS:
-        raise HTTPException(status_code=403, detail=f"Host não autorizado no proxy: {host}")
-    headers = {"User-Agent": "BondGis/1.0"}
-    try:
-        r = requests.get(url, timeout=60, headers=headers)
-    except requests.exceptions.SSLError:
-        # Cadeia/handshake SSL incompatível (comum em GeoServers gov-br).
-        # Refaz pela sessão de TLS legado. Hosts são todos da allowlist,
-        # públicos e sem credenciais — risco baixo.
-        try:
-            r = _legacy_session.get(url, timeout=60, headers=headers, verify=False)
-        except requests.RequestException as exc:
-            raise HTTPException(status_code=502, detail=f"Falha ao acessar a fonte: {exc}")
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"Falha ao acessar a fonte: {exc}")
+    r = _fetch_allowlisted(url)
     return Response(
         content=r.content,
         status_code=r.status_code,
         media_type=r.headers.get("content-type", "application/octet-stream"),
     )
+
+
+@app.get("/api/ping")
+def ping(url: str = Query(..., description="URL pública (host na allowlist) a testar")):
+    """Testa server-side se uma fonte externa responde — do MESMO caminho por
+    onde o app a acessa (backend), sem os falsos negativos do ping no-cors do
+    navegador. Qualquer resposta HTTP (mesmo 3xx/4xx) = servidor no ar."""
+    import time
+    host = (urlparse(url).hostname or "").lower()
+    if host not in ALLOWED_PROXY_HOSTS:
+        raise HTTPException(status_code=403, detail=f"Host não autorizado: {host}")
+    t0 = time.perf_counter()
+    try:
+        r = _fetch_allowlisted(url, timeout=15, allow_redirects=False)
+        return {"online": True, "status": r.status_code,
+                "ms": round((time.perf_counter() - t0) * 1000)}
+    except HTTPException as exc:
+        return {"online": False, "status": None,
+                "ms": round((time.perf_counter() - t0) * 1000),
+                "detalhe": str(exc.detail)[:140]}
 
 
 @app.get("/api/health", response_model=HealthResponse)
