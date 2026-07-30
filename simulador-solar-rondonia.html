@@ -145,6 +145,70 @@ header p.sub{margin-top:14px;max-width:620px;color:#C9D6CC;font-size:.98rem}
 .resultado-juros .linha-item{font-family:'IBM Plex Mono',monospace;font-size:.85rem}
 .resultado-juros #parcelaCalculada{color:var(--verde-ok);font-weight:700}
 
+/* ---- extras do CET dentro da calculadora ---- */
+.cet-extras{margin-top:18px;border-top:1px dashed #E0C489;padding-top:14px}
+.cet-extras-titulo{font-weight:700;font-size:.86rem;color:var(--mata);margin-bottom:4px}
+.btn-emitir-cet{
+  width:100%;margin-top:14px;padding:14px;border:none;border-radius:10px;
+  background:var(--sol);color:var(--mata);font:900 .95rem 'Archivo',sans-serif;
+  cursor:pointer;box-shadow:0 4px 0 #C98600;
+}
+.btn-emitir-cet:active{transform:translateY(2px);box-shadow:0 2px 0 #C98600}
+
+/* ================= DOCUMENTO CET ================= */
+#secaoCET{display:none;margin-top:40px}
+#secaoCET.mostrar{display:block;animation:fadeUp .45s ease}
+.cet-doc{background:var(--branco);border:1px solid var(--linha);border-radius:var(--raio);box-shadow:var(--sombra);padding:30px 28px}
+@media(max-width:600px){.cet-doc{padding:20px 16px}}
+.cet-cabecalho{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;border-bottom:2px solid var(--mata);padding-bottom:18px;margin-bottom:22px}
+.cet-eyebrow{font-family:'IBM Plex Mono',monospace;font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2)}
+.cet-titulo{font-family:'Archivo',sans-serif;font-weight:900;font-size:clamp(1.3rem,3.4vw,1.75rem);color:var(--mata);margin-top:4px}
+.cet-sub{font-size:.85rem;color:var(--ink-2);margin-top:6px}
+.cet-selo{
+  flex:none;font-family:'IBM Plex Mono',monospace;font-size:.68rem;line-height:1.5;
+  text-align:right;color:var(--ink-2);border-left:1px solid var(--linha);padding-left:16px;
+}
+@media(max-width:600px){.cet-cabecalho{flex-direction:column}.cet-selo{border-left:none;padding-left:0;text-align:left}}
+
+.cet-resumo{display:grid;grid-template-columns:1fr 1fr;gap:0 28px;margin-bottom:24px}
+@media(max-width:600px){.cet-resumo{grid-template-columns:1fr}}
+.cet-resumo .cr{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px dotted var(--linha);font-size:.87rem}
+.cet-resumo .cr span:last-child{font-family:'IBM Plex Mono',monospace;font-weight:600;white-space:nowrap}
+
+.cet-destaque{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:28px}
+@media(max-width:620px){.cet-destaque{grid-template-columns:1fr}}
+.cet-destaque-item{background:var(--mata);color:#fff;border-radius:12px;padding:16px 18px}
+.cet-destaque-item:last-child{background:var(--sol);color:var(--mata)}
+.cet-destaque-item .cdl{display:block;font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:#B9CDBF;font-weight:700}
+.cet-destaque-item:last-child .cdl{color:#7A5200}
+.cet-destaque-item .cdv{display:block;font-family:'Archivo',sans-serif;font-weight:900;font-size:clamp(1.15rem,2.9vw,1.5rem);margin-top:4px}
+
+.cet-secao{font-family:'Archivo',sans-serif;font-weight:700;font-size:1.05rem;margin-bottom:12px}
+.cet-tabela-wrap{max-height:460px;overflow:auto;border:1px solid var(--linha);border-radius:10px}
+.cet-tabela{width:100%;border-collapse:collapse;font-family:'IBM Plex Mono',monospace;font-size:.78rem}
+.cet-tabela th{
+  position:sticky;top:0;z-index:1;background:var(--mata);color:#fff;
+  padding:10px 9px;text-align:right;font-weight:500;font-size:.72rem;white-space:nowrap;
+}
+.cet-tabela th:first-child,.cet-tabela td:first-child{text-align:center}
+.cet-tabela th:nth-child(2),.cet-tabela td:nth-child(2){text-align:center}
+.cet-tabela td{padding:8px 9px;text-align:right;border-bottom:1px solid #EEF0EA;white-space:nowrap}
+.cet-tabela tbody tr:nth-child(even){background:#FAFBF8}
+.cet-tabela tbody tr:hover{background:var(--sol-claro)}
+.cet-tabela td.c-amort{color:var(--verde-ok);font-weight:600}
+.cet-tabela td.c-juros{color:var(--vermelho)}
+.cet-tabela td.c-parcela{font-weight:700}
+.cet-tabela tfoot td{
+  position:sticky;bottom:0;background:var(--sol-claro);font-weight:700;
+  padding:11px 9px;text-align:right;border-top:2px solid var(--mata);font-size:.78rem;
+}
+.cet-tabela tfoot td:first-child{text-align:center}
+
+.cet-legenda{margin-top:20px;font-size:.85rem;color:var(--ink-2);line-height:1.6}
+.cet-legenda strong{color:var(--mata)}
+.cet-aviso{margin-top:10px;font-size:.78rem;padding:12px 14px;background:var(--sol-claro);border:1px solid #F0D79A;border-radius:8px;color:var(--ink)}
+.cet-acoes{margin-top:24px}
+
 details.avancado{margin-top:6px;border-top:1px dashed var(--linha);padding-top:12px}
 details.avancado summary{cursor:pointer;font-size:.85rem;font-weight:600;color:var(--ink-2)}
 details.avancado .campo{margin-top:14px}
@@ -260,7 +324,7 @@ footer{margin-top:60px;font-size:.78rem;color:var(--ink-2);border-top:1px solid 
   header{padding:20px}
   .topbar{padding:8px 20px}
   .topbar img.logo-principal{height:56px}
-  .sol-arc,.grid,.btn-calc,.acoes,footer .no-print{display:none!important}
+  .sol-arc,.wizard,.grid,.btn-calc,.acoes,footer .no-print{display:none!important}
   body{background:#fff}
   #relatorio{margin-top:10px}
   .card,.conta,.proj,.fin-card,.big{box-shadow:none}
@@ -268,6 +332,24 @@ footer{margin-top:60px;font-size:.78rem;color:var(--ink-2);border-top:1px solid 
   .interpreta{background:var(--sol-claro)!important;color:var(--ink)!important}
   .interpreta strong{color:var(--mata)!important}
   .rcard.destaque,.rcard.ouro{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+
+  /* Documento CET: imprime a planilha inteira, sem rolagem nem sticky */
+  .cet-doc{box-shadow:none;border:none;padding:0}
+  .cet-tabela-wrap{max-height:none!important;overflow:visible!important;border:none}
+  .cet-tabela th,.cet-tabela tfoot td{position:static!important}
+  .cet-tabela{font-size:.66rem}
+  .cet-tabela th{padding:6px 5px;font-size:.6rem}
+  .cet-tabela td{padding:5px}
+  .cet-tabela thead{display:table-header-group}   /* repete o cabeçalho a cada página */
+  .cet-tabela tr{page-break-inside:avoid}
+  .cet-destaque-item,.cet-tabela th,.cet-tabela tfoot td,.cet-tabela tbody tr:nth-child(even){
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;
+  }
+  /* Imprimir SÓ o CET */
+  body.print-cet .topbar,body.print-cet header,body.print-cet #relatorio,body.print-cet footer{display:none!important}
+  body.print-cet #secaoCET{display:block!important;margin:0}
+  /* Imprimir SÓ o relatório solar */
+  body.print-solar #secaoCET{display:none!important}
 }
 
 /* ================= UX 2.0 — wizard, cards e indicadores ================= */
@@ -530,6 +612,26 @@ details.tecnico .proj{box-shadow:none;border:none;padding:0}
           </div>
           <div class="nota" id="notaAmortizacao">Tabela Price (Sistema de Amortização Francês): a parcela é sempre igual do início ao fim — a mais usada por bancos e financeiras.</div>
           <div class="nota">Ao calcular, a parcela do campo acima é preenchida automaticamente — o prazo considerado é o informado no campo "Prazo".</div>
+
+          <div class="cet-extras">
+            <div class="cet-extras-titulo">Custos adicionais do contrato <span class="hint">(entram no CET)</span></div>
+            <div class="duo">
+              <div class="campo">
+                <label for="tarifaCadastro">Tarifa de cadastro / TAC <span class="hint">(R$)</span></label>
+                <input type="number" id="tarifaCadastro" value="0" min="0" step="10">
+              </div>
+              <div class="campo">
+                <label for="seguroMensal">Seguro prestamista <span class="hint">(R$/mês)</span></label>
+                <input type="number" id="seguroMensal" value="0" min="0" step="1">
+              </div>
+            </div>
+            <div class="campo">
+              <label for="dataPrimeiraParcela">Vencimento da 1ª parcela</label>
+              <input type="date" id="dataPrimeiraParcela">
+            </div>
+            <button type="button" class="btn-emitir-cet" id="btnEmitirCET">📄 Emitir CET e demonstrativo de parcelas</button>
+            <div class="nota">Gera o documento completo com todas as parcelas (amortização, juros, saldo devedor) e o Custo Efetivo Total, no formato usado pelas instituições financeiras.</div>
+          </div>
         </details>
       </div>
 
@@ -542,6 +644,67 @@ details.tecnico .proj{box-shadow:none;border:none;padding:0}
       <button type="button" class="btn-calc" id="calcular" style="display:none">☀ Ver meu resultado</button>
     </div>
   </div>
+
+  <!-- ================= DOCUMENTO CET ================= -->
+  <section id="secaoCET" aria-live="polite">
+    <div class="cet-doc">
+      <div class="cet-cabecalho">
+        <div>
+          <div class="cet-eyebrow">Demonstrativo de financiamento</div>
+          <h2 class="cet-titulo">Custo Efetivo Total (CET)</h2>
+          <p class="cet-sub" id="cetSubtitulo"></p>
+        </div>
+        <div class="cet-selo" id="cetSelo"></div>
+      </div>
+
+      <div class="cet-resumo" id="cetResumo"></div>
+
+      <div class="cet-destaque">
+        <div class="cet-destaque-item">
+          <span class="cdl">CET mensal</span>
+          <span class="cdv" id="cetMensal">—</span>
+        </div>
+        <div class="cet-destaque-item">
+          <span class="cdl">CET anual</span>
+          <span class="cdv" id="cetAnual">—</span>
+        </div>
+        <div class="cet-destaque-item">
+          <span class="cdl">Total a pagar</span>
+          <span class="cdv" id="cetTotalPagar">—</span>
+        </div>
+      </div>
+
+      <h3 class="cet-secao">Evolução do financiamento — parcela a parcela</h3>
+      <div class="cet-tabela-wrap">
+        <table class="cet-tabela">
+          <thead>
+            <tr>
+              <th>Parcela</th>
+              <th>Vencimento</th>
+              <th>Saldo devedor</th>
+              <th>Amortização</th>
+              <th>Juros</th>
+              <th>Seguro</th>
+              <th>Valor da parcela</th>
+              <th>Saldo após pagar</th>
+            </tr>
+          </thead>
+          <tbody id="cetTbody"></tbody>
+          <tfoot id="cetTfoot"></tfoot>
+        </table>
+      </div>
+
+      <div class="cet-legenda">
+        <p><strong>Como ler este demonstrativo:</strong> a <strong>amortização</strong> é a parte da parcela que efetivamente abate a sua dívida. Os <strong>juros</strong> são o custo do dinheiro no mês, calculados sobre o saldo devedor — por isso caem conforme a dívida diminui. O <strong>CET (Custo Efetivo Total)</strong> é a taxa que reúne juros e todos os encargos do contrato, sendo a forma correta de comparar propostas de bancos diferentes (Resolução CMN nº 3.517/2007).</p>
+        <p class="cet-aviso" id="cetAviso"></p>
+      </div>
+
+      <div class="acoes cet-acoes">
+        <button type="button" class="btn-print" id="btnImprimirCET">🖨 Imprimir / salvar CET em PDF</button>
+        <button type="button" class="btn-limpar" id="btnFecharCET">Fechar demonstrativo</button>
+      </div>
+    </div>
+  </section>
 
   <!-- ================= RELATÓRIO ================= -->
   <section id="relatorio" aria-live="polite">
@@ -651,7 +814,7 @@ details.tecnico .proj{box-shadow:none;border:none;padding:0}
     </details>
 
     <div class="acoes">
-      <button class="btn-print" onclick="window.print()">🖨 Imprimir / salvar proposta em PDF</button>
+      <button class="btn-print" id="btnImprimirRelatorio">🖨 Imprimir / salvar proposta em PDF</button>
       <button class="btn-limpar" onclick="document.getElementById('relatorio').classList.remove('mostrar');window.scrollTo({top:0,behavior:'smooth'})">Nova simulação</button>
     </div>
   </section>
@@ -720,22 +883,6 @@ function calcularParcelaPrice(valorFinanciado, taxaMensalPct, prazo){
   return valorFinanciado * (i*Math.pow(1+i,prazo)) / (Math.pow(1+i,prazo)-1);
 }
 
-function calcularSAC(valorFinanciado, taxaMensalPct, prazo){
-  const i = taxaMensalPct/100;
-  const amortizacao = valorFinanciado/prazo;
-  let saldo = valorFinanciado, totalJuros = 0, primeira = null, ultima = 0;
-  for(let m=1;m<=prazo;m++){
-    const juros = saldo*i;
-    const parcelaM = amortizacao + juros;
-    if(primeira===null) primeira = parcelaM;
-    ultima = parcelaM;
-    totalJuros += juros;
-    saldo -= amortizacao;
-  }
-  const totalPago = valorFinanciado + totalJuros;
-  return { primeira, ultima, media: totalPago/prazo, totalJuros, totalPago };
-}
-
 let modoAmortizacao = 'price';
 $('modoPrice').addEventListener('click', ()=>{
   modoAmortizacao='price';
@@ -753,32 +900,200 @@ $('modoSac').addEventListener('click', ()=>{
 $('btnCalcJuros').addEventListener('click', ()=>{
   const valorFinanciado = +$('valorFinanciado').value || 0;
   const taxa = +$('taxaJuros').value || 0;
-  const prazo = +$('prazo').value || 0;
+  const prazo = Math.floor(+$('prazo').value || 0);
   if(valorFinanciado<=0 || prazo<=0){
     $('prazo').focus();
     return;
   }
 
+  // Usa a MESMA planilha do CET (sem seguro, que é encargo à parte), para que
+  // os totais dos dois painéis fechem exatamente iguais.
+  const linhas = gerarCronograma(valorFinanciado, taxa, prazo, modoAmortizacao, 0, null);
+  const totalPago  = linhas.reduce((s,l)=>s+l.parcela,0);
+  const totalJuros = linhas.reduce((s,l)=>s+l.juros,0);
+
   if(modoAmortizacao==='price'){
-    const pmt = calcularParcelaPrice(valorFinanciado, taxa, prazo);
-    const totalPago = pmt*prazo;
-    const totalJuros = totalPago - valorFinanciado;
+    const pmt = linhas[0].parcela;
     $('parcela').value = pmt.toFixed(2);
     $('resultadoJurosConteudo').innerHTML =
       `<div class="linha-item"><span>Parcela fixa (todos os meses)</span><span id="parcelaCalculada">${fmt(pmt)}</span></div>
        <div class="linha-item"><span>Total pago ao final</span><span>${fmt(totalPago)}</span></div>
        <div class="linha-item"><span>Total de juros</span><span>${fmt(totalJuros)}</span></div>`;
   } else {
-    const r = calcularSAC(valorFinanciado, taxa, prazo);
-    $('parcela').value = r.media.toFixed(2);
+    const media = totalPago/prazo;
+    $('parcela').value = media.toFixed(2);
     $('resultadoJurosConteudo').innerHTML =
-      `<div class="linha-item"><span>1ª parcela (a mais alta)</span><span id="parcelaCalculada">${fmt(r.primeira)}</span></div>
-       <div class="linha-item"><span>Última parcela (a mais baixa)</span><span>${fmt(r.ultima)}</span></div>
-       <div class="linha-item"><span>Parcela média (usada na simulação)</span><span>${fmt(r.media)}</span></div>
-       <div class="linha-item"><span>Total pago ao final</span><span>${fmt(r.totalPago)}</span></div>
-       <div class="linha-item"><span>Total de juros</span><span>${fmt(r.totalJuros)}</span></div>`;
+      `<div class="linha-item"><span>1ª parcela (a mais alta)</span><span id="parcelaCalculada">${fmt(linhas[0].parcela)}</span></div>
+       <div class="linha-item"><span>Última parcela (a mais baixa)</span><span>${fmt(linhas[prazo-1].parcela)}</span></div>
+       <div class="linha-item"><span>Parcela média (usada na simulação)</span><span>${fmt(media)}</span></div>
+       <div class="linha-item"><span>Total pago ao final</span><span>${fmt(totalPago)}</span></div>
+       <div class="linha-item"><span>Total de juros</span><span>${fmt(totalJuros)}</span></div>`;
   }
   $('resultadoJuros').classList.add('mostrar');
+});
+
+/* ================= CET + demonstrativo de parcelas ================= */
+const pct = (v,d=2) => `${(v*100).toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d})}%`;
+
+// 1ª parcela sugerida: 30 dias a partir de hoje.
+(function(){
+  const d = new Date(); d.setDate(d.getDate()+30);
+  $('dataPrimeiraParcela').value = d.toISOString().slice(0,10);
+})();
+
+/** Vencimento da parcela n, preservando o dia e limitando ao último dia do mês. */
+function vencimentoParcela(baseISO, n){
+  if(!baseISO) return '—';
+  const [y,m,d] = baseISO.split('-').map(Number);
+  if(!y || !m || !d) return '—';
+  const alvo = (m-1) + (n-1);
+  const ano = y + Math.floor(alvo/12);
+  const mes = ((alvo % 12) + 12) % 12;
+  const ultimoDia = new Date(ano, mes+1, 0).getDate();
+  return new Date(ano, mes, Math.min(d, ultimoDia)).toLocaleDateString('pt-BR');
+}
+
+/** Planilha de evolução do financiamento, parcela a parcela.
+    Trabalha arredondado ao centavo em cada linha (como o extrato de um banco),
+    para que a soma das colunas feche exatamente com os totais. */
+function gerarCronograma(pv, taxaMensalPct, prazo, sistema, seguro, dataISO){
+  const c2 = v => Math.round(v*100)/100;
+  const i = taxaMensalPct/100;
+  const pmtPrice = calcularParcelaPrice(pv, taxaMensalPct, prazo);
+  const amortSac = pv/prazo;
+  const linhas = [];
+  let saldo = c2(pv);
+  for(let n=1;n<=prazo;n++){
+    const saldoInicial = saldo;
+    const juros = c2(saldoInicial*i);
+    // A última parcela quita o saldo remanescente (absorve o arredondamento).
+    const amort = (n===prazo) ? saldoInicial
+                : Math.min(c2(sistema==='price' ? pmtPrice-juros : amortSac), saldoInicial);
+    const parcela = c2(amort + juros);
+    saldo = c2(saldoInicial - amort);
+    linhas.push({n, venc:vencimentoParcela(dataISO,n), saldoInicial, amort, juros,
+                 seguro, parcela, total:c2(parcela+seguro), saldoFinal:saldo});
+  }
+  return linhas;
+}
+
+/** CET mensal = taxa que iguala o valor liberado ao fluxo de pagamentos (TIR).
+    Resolvido por bisseção: f(i) é monótona decrescente em i. */
+function calcularCETMensal(liberado, pagamentos){
+  if(liberado <= 0 || !pagamentos.length) return null;
+  const f = i => pagamentos.reduce((s,p,idx)=> s + p/Math.pow(1+i, idx+1), 0) - liberado;
+  if(f(0) <= 0) return 0;                       // não há custo financeiro
+  let lo = 0, hi = 1, guarda = 0;
+  while(f(hi) > 0 && guarda < 100){ lo = hi; hi *= 2; guarda++; }
+  if(f(hi) > 0) return null;                    // fora de faixa plausível
+  for(let k=0;k<300;k++){
+    const mid = (lo+hi)/2;
+    if(f(mid) > 0) lo = mid; else hi = mid;
+  }
+  return (lo+hi)/2;
+}
+
+$('btnEmitirCET').addEventListener('click', ()=>{
+  const pv     = +$('valorFinanciado').value || 0;
+  const taxa   = +$('taxaJuros').value || 0;
+  const prazo  = Math.floor(+$('prazo').value || 0);
+  const tac    = +$('tarifaCadastro').value || 0;
+  const seguro = +$('seguroMensal').value || 0;
+  const dataISO= $('dataPrimeiraParcela').value;
+  const sistema= modoAmortizacao;
+
+  if(pv <= 0){ $('valorFinanciado').focus(); return; }
+  if(prazo <= 0){ $('prazo').focus(); return; }
+
+  const linhas = gerarCronograma(pv, taxa, prazo, sistema, seguro, dataISO);
+  const totJuros  = linhas.reduce((s,l)=>s+l.juros,0);
+  const totSeguro = seguro*prazo;
+  const totalPagar= linhas.reduce((s,l)=>s+l.total,0) + tac;
+
+  const liberado = pv - tac;                     // TAC paga na liberação
+  const cetM = calcularCETMensal(liberado, linhas.map(l=>l.total));
+  const cetA = (cetM===null) ? null : Math.pow(1+cetM,12)-1;
+  const taxaAnual = Math.pow(1+taxa/100,12)-1;
+
+  const nomeSistema = sistema==='price' ? 'Tabela Price (Francês)' : 'SAC (Amortização Constante)';
+  // Na Price a prestação é fixa; no SAC ela cai, então a simulação de economia
+  // (que usa um valor mensal único) recebe a média.
+  const parcelaSimulacao = sistema==='price'
+    ? linhas[0].total
+    : linhas.reduce((s,l)=>s+l.total,0)/prazo;
+
+  // Mantém a simulação de economia coerente com o contrato emitido.
+  $('parcela').value = parcelaSimulacao.toFixed(2);
+
+  $('cetSubtitulo').textContent =
+    `${nomeSistema} · ${prazo} parcela${prazo>1?'s':''} · valor financiado de ${fmt(pv)}`;
+  $('cetSelo').innerHTML =
+    `SIMULAÇÃO<br>Emitido em ${new Date().toLocaleDateString('pt-BR')}<br>às ${new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
+
+  const linha = (r,v) => `<div class="cr"><span>${r}</span><span>${v}</span></div>`;
+  $('cetResumo').innerHTML =
+    linha('Valor financiado', fmt(pv)) +
+    linha('Tarifa de cadastro (TAC)', fmt(tac)) +
+    linha('Valor líquido liberado', fmt(liberado)) +
+    linha('Sistema de amortização', nomeSistema) +
+    linha('Taxa de juros', `${taxa.toLocaleString('pt-BR',{minimumFractionDigits:2})}% a.m.`) +
+    linha('Taxa de juros anual equivalente', pct(taxaAnual)) +
+    linha('Prazo', `${prazo} meses`) +
+    linha('Seguro prestamista', seguro>0 ? `${fmt(seguro)}/mês` : 'não contratado') +
+    linha('1º vencimento', linhas[0].venc) +
+    linha('Último vencimento', linhas[prazo-1].venc) +
+    linha('Valor da 1ª parcela', fmt(linhas[0].total)) +
+    linha('Valor da última parcela', fmt(linhas[prazo-1].total)) +
+    linha('Total de juros', fmt(totJuros)) +
+    linha('Total de seguro', fmt(totSeguro));
+
+  $('cetMensal').textContent = cetM===null ? 'n/d' : pct(cetM);
+  $('cetAnual').textContent  = cetA===null ? 'n/d' : pct(cetA);
+  $('cetTotalPagar').textContent = fmt(totalPagar);
+
+  $('cetTbody').innerHTML = linhas.map(l=>`
+    <tr>
+      <td>${l.n}/${prazo}</td>
+      <td>${l.venc}</td>
+      <td>${fmt(l.saldoInicial)}</td>
+      <td class="c-amort">${fmt(l.amort)}</td>
+      <td class="c-juros">${fmt(l.juros)}</td>
+      <td>${l.seguro>0?fmt(l.seguro):'—'}</td>
+      <td class="c-parcela">${fmt(l.total)}</td>
+      <td>${fmt(l.saldoFinal)}</td>
+    </tr>`).join('');
+
+  $('cetTfoot').innerHTML = `
+    <tr>
+      <td colspan="2">TOTAIS</td>
+      <td>—</td>
+      <td>${fmt(pv)}</td>
+      <td>${fmt(totJuros)}</td>
+      <td>${totSeguro>0?fmt(totSeguro):'—'}</td>
+      <td>${fmt(totalPagar - tac)}</td>
+      <td>${fmt(0)}</td>
+    </tr>`;
+
+  $('cetAviso').innerHTML =
+    `<strong>Documento de simulação.</strong> Não constitui proposta de crédito e não substitui o CET oficial fornecido pela instituição financeira, que pode incluir IOF, tributos e outras tarifas não previstas aqui. O campo "Valor da parcela" foi atualizado para <strong>${fmt(parcelaSimulacao)}</strong>${sistema==='sac'?' (média das parcelas, já que no SAC elas são decrescentes)':''}, que é o valor usado na simulação de economia solar.`;
+
+  $('secaoCET').classList.add('mostrar');
+  $('secaoCET').scrollIntoView({behavior:'smooth',block:'start'});
+});
+
+$('btnImprimirRelatorio').addEventListener('click', ()=>{
+  document.body.classList.add('print-solar');
+  window.print();
+  setTimeout(()=>document.body.classList.remove('print-solar'), 500);
+});
+$('btnImprimirCET').addEventListener('click', ()=>{
+  document.body.classList.add('print-cet');
+  window.print();
+  setTimeout(()=>document.body.classList.remove('print-cet'), 500);
+});
+$('btnFecharCET').addEventListener('click', ()=>{
+  $('secaoCET').classList.remove('mostrar');
+  document.querySelector('.wizard').scrollIntoView({behavior:'smooth',block:'start'});
 });
 
 function contaMes(consumo,producao,preco,fioBTar,minKwh,ilum,ano,degradFator){
