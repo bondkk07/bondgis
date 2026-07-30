@@ -84,6 +84,29 @@ class HealthResponse(BaseModel):
     message: Optional[str] = None
 
 
+# ── TARIFA DE ENERGIA (ANEEL Dados Abertos) ───────────────────────────────
+class AliquotasTarifa(BaseModel):
+    icms: float
+    pis: float
+    cofins: float
+
+
+class TarifaEnergiaResponse(BaseModel):
+    distribuidora: str
+    cnpj: Optional[str] = None
+    subgrupo: Optional[str] = None
+    classe: Optional[str] = None
+    modalidade: Optional[str] = None
+    vigencia_inicio: Optional[str] = None
+    vigencia_fim: Optional[str] = None
+    vlr_te_mwh: float
+    vlr_tusd_mwh: float
+    tarifa_base_kwh: float
+    tarifa_sugerida_com_impostos_kwh: float
+    aliquotas_usadas: AliquotasTarifa
+    fonte_url: str
+
+
 # ── ANALISAR ÁREA (pipeline unificado) ────────────────────────────────────
 class TipoAnalise(str, Enum):
     completa = "completa"

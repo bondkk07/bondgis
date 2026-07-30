@@ -45,11 +45,13 @@ _legacy_session.mount("https://", _LegacyTLSAdapter())
 
 import analise
 import sentinel
+import tarifas
 from config import get_settings
 from earth_engine import init_earth_engine, is_initialized
 from schemas import (
     AnaliseRequest, AnaliseResponse,
     DatesRequest, DatesResponse, HealthResponse,
+    TarifaEnergiaResponse,
     TilesRequest, TilesResponse, TimeSeriesRequest, TimeSeriesResponse,
 )
 
@@ -68,6 +70,7 @@ ALLOWED_PROXY_HOSTS = {
     "terrabrasilis.dpi.inpe.br", "geoinfo.dados.embrapa.br",
     "geoportal.sedam.ro.gov.br", "labdez.mma.gov.br",
     "pamgia.ibama.gov.br", "tiles.maps.eox.at",
+    "dadosabertos.aneel.gov.br",
 }
 
 settings = get_settings()
@@ -171,6 +174,37 @@ def health() -> HealthResponse:
         project=settings.ee_project or None,
         message=None if ok else "Earth Engine não inicializado — verifique as variáveis de ambiente.",
     )
+
+
+@app.get("/api/tarifa-energia", response_model=TarifaEnergiaResponse)
+def tarifa_energia(
+    distribuidora: str = Query("ERO", description="Código SigAgente da distribuidora na ANEEL (ex.: ERO = Energisa Rondônia)"),
+    subgrupo: str = Query("B1", description="Subgrupo tarifário (ex.: B1 = baixa tensão)"),
+    classe: str = Query("Residencial", description="Classe de consumo"),
+    modalidade: str = Query("Convencional", description="Modalidade tarifária"),
+) -> TarifaEnergiaResponse:
+    """Consulta a tarifa de energia homologada pela ANEEL (Dados Abertos) para
+    a distribuidora/classe informadas e sugere um valor de kWh com impostos
+    (estimativa — ver docstring de tarifas.py). Cacheado em memória por 12h."""
+    chave = f"{distribuidora}|{subgrupo}|{classe}|{modalidade}"
+    cache_hit = tarifas.buscar_no_cache(chave)
+    if cache_hit:
+        return TarifaEnergiaResponse(**cache_hit)
+
+    url = tarifas.montar_url_aneel(distribuidora, subgrupo, classe, modalidade)
+    r = _fetch_allowlisted(url, timeout=20)
+    if r.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"ANEEL respondeu HTTP {r.status_code}")
+    try:
+        dado = tarifas.processar_resposta(r.json(), distribuidora, subgrupo, classe, modalidade)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Erro em /api/tarifa-energia")
+        raise HTTPException(status_code=502, detail=f"Falha ao interpretar resposta da ANEEL: {exc}")
+
+    tarifas.salvar_no_cache(chave, dado)
+    return TarifaEnergiaResponse(**dado)
 
 
 @app.post("/api/tiles", response_model=TilesResponse)
