@@ -580,6 +580,31 @@ details.tecnico .proj{box-shadow:none;border:none;padding:0}
         <div class="nota">Serve apenas para estimar a quantidade de placas e a área de telhado. Não altera o cálculo de economia.</div>
       </div>
 
+      <details class="avancado">
+        <summary>Manutenção e troca do inversor (custos dos 25 anos)</summary>
+        <div class="duo">
+          <div class="campo">
+            <label for="oemAnual">Manutenção e limpeza <span class="hint">(R$/ano)</span></label>
+            <input type="number" id="oemAnual" value="300" min="0" step="50">
+          </div>
+          <div class="campo">
+            <label for="inflacaoCustos">Inflação desses custos <span class="hint">(%/ano)</span></label>
+            <input type="number" id="inflacaoCustos" value="4.5" min="0" step="0.5">
+          </div>
+        </div>
+        <div class="duo">
+          <div class="campo">
+            <label for="custoInversor">Troca do inversor <span class="hint">(R$)</span></label>
+            <input type="number" id="custoInversor" value="4500" min="0" step="100">
+          </div>
+          <div class="campo">
+            <label for="anoInversor">Ano da troca</label>
+            <input type="number" id="anoInversor" value="12" min="1" max="25" step="1">
+          </div>
+        </div>
+        <div class="nota">As placas duram mais de 25 anos, mas o <strong>inversor</strong> normalmente precisa ser trocado uma vez nesse período. Esses custos entram no cálculo do retorno — se quiser ver o resultado sem eles, deixe os campos em zero.</div>
+      </details>
+
       <div class="campo">
         <label>A energia vai ser financiada?</label>
         <div class="toggle-row" role="group" aria-label="Financiamento">
@@ -739,7 +764,7 @@ details.tecnico .proj{box-shadow:none;border:none;padding:0}
       <div class="rcard"><span class="ic">📉</span><div class="rlbl">Redução da conta</div><div class="rnum" id="numReducao">—</div><div class="rmini">a menos todo mês</div></div>
       <div class="rcard"><span class="ic">🏡</span><div class="rlbl">Área de telhado</div><div class="rnum" id="numArea">—</div><div class="rmini" id="miniArea"></div></div>
       <div class="rcard"><span class="ic">🕒</span><div class="rlbl">O sistema se paga em</div><div class="rnum" id="payback">—</div><div class="rmini">tempo de retorno</div></div>
-      <div class="rcard destaque"><span class="ic">📈</span><div class="rlbl">Economia em 25 anos</div><div class="rnum" id="eco25">—</div><div class="rmini">já descontado o investimento</div></div>
+      <div class="rcard destaque"><span class="ic">📈</span><div class="rlbl">Economia em 25 anos</div><div class="rnum" id="eco25">—</div><div class="rmini">já descontados investimento e manutenção</div></div>
     </div>
 
     <!-- INDICADORES VISUAIS -->
@@ -821,7 +846,8 @@ details.tecnico .proj{box-shadow:none;border:none;padding:0}
       <div class="tec-body">
         <div class="proj">
           <h3>Economia acumulada ao longo dos anos</h3>
-          <p>A linha verde é o dinheiro que fica no seu bolso. A linha tracejada é o custo do sistema<span id="pFinNota"></span>. Onde elas se cruzam, o sistema se pagou.</p>
+          <p>A linha verde é o dinheiro que fica no seu bolso. A linha tracejada é tudo que sai do bolso: o custo do sistema<span id="pFinNota"></span>, mais a manutenção e a troca do inversor — por isso ela sobe ao longo do tempo. Onde elas se cruzam, o sistema se pagou.</p>
+          <div class="explica" id="custosPosse" style="margin-top:0"></div>
           <div id="grafico"></div>
           <table class="tproj">
             <thead>
@@ -840,7 +866,7 @@ details.tecnico .proj{box-shadow:none;border:none;padding:0}
   </section>
 
   <footer>
-    <p><strong>Como o cálculo é feito:</strong> tarifas base da Energisa Rondônia (jun/2026), impostos de RO (ICMS 19,5%, PIS 1,65%, COFINS 7,60%) embutidos no preço do kWh, custo de disponibilidade conforme o tipo de ligação (30/50/100 kWh) e cobrança do Fio B sobre a energia compensada, com o escalonamento da Lei nº 14.300/2022 (60% em 2026, 75% em 2027, 90% em 2028 e 100% a partir de 2029). Projeção de 25 anos com reajuste anual da energia e perda gradual de eficiência dos painéis. Os valores são estimativas para fins de comparação e não substituem a fatura oficial da distribuidora.</p>
+    <p><strong>Como o cálculo é feito:</strong> tarifas base da Energisa Rondônia (jun/2026), impostos de RO (ICMS 19,5%, PIS 1,65%, COFINS 7,60%) embutidos no preço do kWh, custo de disponibilidade conforme o tipo de ligação (30/50/100 kWh) e cobrança do Fio B sobre a energia compensada, com o escalonamento da Lei nº 14.300/2022 (60% em 2026, 75% em 2027, 90% em 2028 e 100% a partir de 2029). Projeção de 25 anos com reajuste anual da energia e perda gradual de eficiência dos painéis. O excedente injetado na rede é acumulado como crédito com validade de 60 meses (Lei 14.300) e só abate consumo acima da taxa mínima, que é sempre devida. O retorno já desconta os custos de manutenção e a troca do inversor informados. Os valores são estimativas para fins de comparação e não substituem a fatura oficial da distribuidora.</p>
   </footer>
 </div>
 
@@ -1135,16 +1161,27 @@ $('btnFecharCET').addEventListener('click', ()=>{
   document.querySelector('.wizard').scrollIntoView({behavior:'smooth',block:'start'});
 });
 
-function contaMes(consumo,producao,preco,fioBTar,minKwh,ilum,ano,degradFator){
+/** Créditos de energia injetada valem 60 meses (Lei 14.300/2022, art. 1º XIV). */
+const VALIDADE_CREDITO_MESES = 60;
+
+function contaMes(consumo,producao,preco,fioBTar,minKwh,ilum,ano,degradFator,creditosDisp=0){
   const prodReal = producao*degradFator;
-  const compensada = Math.min(prodReal,consumo);
-  const residual = Math.max(consumo-prodReal,0);
+  const compensadaDireta = Math.min(prodReal,consumo);
+  const necessidade = Math.max(consumo-prodReal,0);   // o que falta puxar da rede
+  // O custo de disponibilidade (taxa mínima) é sempre devido, então crédito
+  // usado abaixo desse piso seria desperdiçado — só se abate o que passa dele.
+  const creditoUtilizavel = Math.max(necessidade-minKwh,0);
+  const creditosUsados = Math.min(creditosDisp,creditoUtilizavel);
+  const residual = necessidade-creditosUsados;
   const energiaCobrada = Math.max(residual,minKwh);
+  const excedente = Math.max(prodReal-consumo,0);     // vai para o banco de créditos
+  // O Fio B incide sobre toda a energia compensada, inclusive via créditos.
+  const compensada = compensadaDireta+creditosUsados;
   const fioB = compensada*fioBTar*FIOB_PCT(ano);
   return {
     semSolar: consumo*preco+ilum,
     comSolar: energiaCobrada*preco+fioB+ilum,
-    compensada, energiaCobrada, fioB
+    compensada, energiaCobrada, fioB, creditosUsados, excedente
   };
 }
 
@@ -1185,7 +1222,12 @@ function calcular(){
         prazo=financiado?(+$('prazo').value||0):0,
         // Tarifa de cadastro é desembolso do contrato: entra no custo do
         // financiamento, senão o payback e a economia em 25 anos ficam otimistas.
-        tacFin=financiado?(+$('tarifaCadastro').value||0):0;
+        tacFin=financiado?(+$('tarifaCadastro').value||0):0,
+        // Custos de posse ao longo dos 25 anos (manutenção + troca do inversor).
+        oemAnual=+$('oemAnual').value||0,
+        inflacao=(+$('inflacaoCustos').value||0)/100,
+        custoInversor=+$('custoInversor').value||0,
+        anoInversor=Math.max(1,Math.floor(+$('anoInversor').value||0));
 
   if(!validarEntradas(consumo, producao, preco)) return;
 
@@ -1213,18 +1255,50 @@ function calcular(){
   const custoTotalFin = entrada + tacFin + parcela*prazo;
   const investRef = financiado ? custoTotalFin : valorProjeto;
   const serie=[]; // {mes, eco, liquido}
+  // Banco de créditos de energia (FIFO). Cada entrada guarda o mês da injeção
+  // para expirar em 60 meses, conforme a Lei 14.300.
+  let banco=[], acOem=0, creditosExpirados=0, creditosAproveitados=0;
   for(let m=1;m<=meses;m++){
     const ano = ANO_ATUAL + Math.floor((m-1)/12);
     const anosPassados = Math.floor((m-1)/12);
     const fatorPreco = Math.pow(1+reajuste,anosPassados);
     const degradFator = Math.pow(1-degrad,anosPassados);
-    const c = contaMes(consumo,producao,preco*fatorPreco,fioBTar*fatorPreco,minKwh,ilum*fatorPreco,ano,degradFator);
+
+    // Expira o que passou da validade antes de somar o saldo disponível.
+    banco = banco.filter(cr => {
+      const vencido = (m - cr.mes) >= VALIDADE_CREDITO_MESES;
+      if(vencido) creditosExpirados += cr.kwh;
+      return !vencido;
+    });
+    const creditosDisp = banco.reduce((s,cr)=>s+cr.kwh,0);
+
+    const c = contaMes(consumo,producao,preco*fatorPreco,fioBTar*fatorPreco,minKwh,ilum*fatorPreco,ano,degradFator,creditosDisp);
+
+    // Consome os créditos mais antigos primeiro e guarda o excedente do mês.
+    let restaConsumir = c.creditosUsados;
+    creditosAproveitados += c.creditosUsados;
+    for(const cr of banco){
+      if(restaConsumir<=1e-9) break;
+      const usa = Math.min(cr.kwh,restaConsumir);
+      cr.kwh -= usa; restaConsumir -= usa;
+    }
+    banco = banco.filter(cr=>cr.kwh>1e-9);
+    if(c.excedente>0) banco.push({mes:m,kwh:c.excedente});
+
     acSem+=c.semSolar; acCom+=c.comSolar; acEco+=(c.semSolar-c.comSolar);
-    const desembolso = financiado ? (entrada + tacFin + parcela*Math.min(m,prazo)) : valorProjeto;
+
+    // Custos de posse, corrigidos pela inflação informada.
+    const fatorCusto = Math.pow(1+inflacao,anosPassados);
+    acOem += (oemAnual/12)*fatorCusto;
+    if(m === anoInversor*12) acOem += custoInversor*Math.pow(1+inflacao,anoInversor-1);
+
+    const desembolsoBase = financiado ? (entrada + tacFin + parcela*Math.min(m,prazo)) : valorProjeto;
+    const desembolso = desembolsoBase + acOem;
     const liquido = acEco - desembolso;
     if(payMes===null && liquido>=0) payMes=m;
     serie.push({m,acSem,acCom,acEco,liquido,desembolso});
   }
+  const totalOem = acOem;
 
   if(payMes!==null){
     const a=Math.floor(payMes/12), me=payMes%12;
@@ -1296,6 +1370,20 @@ function calcular(){
     </tr>`;
   }).join('');
 
+  /* --------- custos de posse e créditos de energia --------- */
+  const partesCusto = [];
+  if(oemAnual>0) partesCusto.push(`manutenção e limpeza a partir de ${fmt0(oemAnual)}/ano`);
+  if(custoInversor>0) partesCusto.push(`uma troca de inversor no ano ${anoInversor} (${fmt0(custoInversor*Math.pow(1+inflacao,anoInversor-1))} corrigidos)`);
+  const txtCusto = partesCusto.length
+    ? `<strong>Custos de manutenção incluídos:</strong> ${partesCusto.join(' e ')}, corrigidos em ${(inflacao*100).toLocaleString('pt-BR',{maximumFractionDigits:1})}% ao ano — <strong>${fmt0(totalOem)}</strong> somados nos 25 anos. Esses valores já estão descontados do payback e da economia acumulada.`
+    : `<strong>Sem custos de manutenção no cálculo.</strong> Você zerou a manutenção e a troca do inversor, então o retorno mostrado é o cenário mais otimista possível.`;
+  const txtCred = creditosAproveitados>1
+    ? ` Do excedente injetado na rede, <strong>${creditosAproveitados.toFixed(0)} kWh</strong> voltaram como crédito para abater contas futuras${creditosExpirados>1?` e ${creditosExpirados.toFixed(0)} kWh expiraram sem uso (validade de 60 meses)`:''}.`
+    : (creditosExpirados>1
+        ? ` O excedente injetado (<strong>${creditosExpirados.toFixed(0)} kWh</strong> ao longo dos 25 anos) <strong>expirou sem uso</strong>: como a taxa mínima da ligação é sempre cobrada, o crédito só ajudaria se em algum mês você puxasse da rede mais que ${minKwh} kWh.`
+        : '');
+  $('custosPosse').innerHTML = txtCusto + txtCred;
+
   /* --------- gráfico SVG --------- */
   desenharGrafico(serie,investRef,financiado);
 
@@ -1332,7 +1420,10 @@ function calcular(){
 function desenharGrafico(serie,investRef,fin){
   const W=960,H=340,P={t:20,r:20,b:36,l:74};
   const anos=25;
-  const maxY=Math.max(serie[serie.length-1].acEco,investRef)*1.08||1;
+  // O desembolso cresce com a manutenção, então entra no teto do eixo Y —
+  // sem isso a linha tracejada pode sair da área do gráfico.
+  const ultimo=serie[serie.length-1];
+  const maxY=Math.max(ultimo.acEco,ultimo.desembolso,investRef)*1.08||1;
   const x=m=>P.l+(m/(anos*12))*(W-P.l-P.r);
   const y=v=>H-P.b-(v/maxY)*(H-P.t-P.b);
   const ptsEco=serie.filter((_,i)=>i%3===0).map(s=>`${x(s.m).toFixed(1)},${y(s.acEco).toFixed(1)}`).join(' ');
@@ -1359,7 +1450,7 @@ function desenharGrafico(serie,investRef,fin){
         <line x1="${P.l+18}" y1="${P.t+14}" x2="${P.l+42}" y2="${P.t+14}" stroke="#1E7B4F" stroke-width="3.5"/>
         <text x="${P.l+48}" y="${P.t+18}" fill="#17251F">Economia acumulada</text>
         <line x1="${P.l+18}" y1="${P.t+32}" x2="${P.l+42}" y2="${P.t+32}" stroke="#B4432E" stroke-width="2.5" stroke-dasharray="6 4"/>
-        <text x="${P.l+48}" y="${P.t+36}" fill="#17251F">${fin?'Entrada + parcelas pagas':'Custo do sistema'}</text>
+        <text x="${P.l+48}" y="${P.t+36}" fill="#17251F">${fin?'Parcelas + manutenção':'Sistema + manutenção'}</text>
       </g>
     </svg>`;
 }
