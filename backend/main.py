@@ -39,9 +39,34 @@ class _LegacyTLSAdapter(HTTPAdapter):
         return super().init_poolmanager(*args, **kwargs)
 
 
+class _CompatTLSAdapter(HTTPAdapter):
+    """Aceita cifras/protocolos legados (SECLEVEL=1) **mantendo** a verificação
+    do certificado e do hostname.
+
+    Vários servidores gov-br encerram o handshake que o OpenSSL 3.x propõe por
+    padrão (SSLEOFError/handshake failure), mas o problema é a negociação de
+    cifra, não a cadeia do certificado. Este meio-termo resolve a compatibilidade
+    sem abrir mão da integridade — o que importa quando o dado alimenta um
+    cálculo financeiro (ver _fetch_aneel)."""
+    def init_poolmanager(self, *args, **kwargs):
+        ctx = create_urllib3_context()
+        ctx.check_hostname = True
+        ctx.verify_mode = ssl.CERT_REQUIRED
+        try:
+            ctx.set_ciphers("DEFAULT@SECLEVEL=1")
+        except ssl.SSLError:
+            pass
+        kwargs["ssl_context"] = ctx
+        return super().init_poolmanager(*args, **kwargs)
+
+
 # Sessão de fallback para hosts com TLS legado (dados públicos da allowlist).
 _legacy_session = requests.Session()
 _legacy_session.mount("https://", _LegacyTLSAdapter())
+
+# Fallback intermediário: cifras legadas, certificado ainda verificado.
+_compat_session = requests.Session()
+_compat_session.mount("https://", _CompatTLSAdapter())
 
 import analise
 import sentinel
@@ -142,8 +167,18 @@ def _fetch_aneel(url: str, timeout: int = 20) -> requests.Response:
     host = (urlparse(url).hostname or "").lower()
     if host != tarifas.ANEEL_HOST:
         raise HTTPException(status_code=400, detail=f"URL fora do domínio da ANEEL: {host}")
+    headers = {"User-Agent": "BondGis/1.0"}
     try:
-        return requests.get(url, timeout=timeout, headers={"User-Agent": "BondGis/1.0"})
+        return requests.get(url, timeout=timeout, headers=headers)
+    except requests.exceptions.SSLError:
+        # O host da ANEEL derruba o handshake padrão do OpenSSL 3.x. Repete com
+        # cifras legadas, mas SEM desativar a verificação do certificado — se
+        # nem assim funcionar, é melhor falhar do que aceitar dado não verificado.
+        logger.warning("TLS padrão falhou na ANEEL; repetindo com cifras legadas (certificado ainda verificado).")
+        try:
+            return _compat_session.get(url, timeout=timeout, headers=headers)
+        except requests.RequestException as exc:
+            raise HTTPException(status_code=502, detail=f"Falha ao acessar a ANEEL: {exc}")
     except requests.RequestException as exc:
         raise HTTPException(status_code=502, detail=f"Falha ao acessar a ANEEL: {exc}")
 
