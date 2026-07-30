@@ -7,6 +7,10 @@ earthengine-api==1.4.3
 pydantic==2.10.4
 pydantic-settings==2.7.1
 python-dotenv==1.0.1
+# Usado pelo /api/proxy, /api/ping e /api/tarifa-energia. Vinha só de forma
+# transitiva (earthengine-api); fixado aqui para o backend não quebrar se essa
+# dependência indireta mudar.
+requests==2.34.2
 
 # --- Opcional: persistência PostgreSQL + PostGIS (desligado por padrão) ---
 # Descomente se for usar o módulo optional_postgis.py.

@@ -376,6 +376,18 @@ footer{margin-top:60px;font-size:.78rem;color:var(--ink-2);border-top:1px solid 
 .wizard-nav .btn-calc{width:auto;margin:0 0 0 auto;padding:14px 28px;box-shadow:0 5px 0 #C98600}
 .wizard-nav .btn-calc:active{transform:translateY(3px);box-shadow:0 2px 0 #C98600}
 
+/* ---- status para leitor de tela / validação ---- */
+.sr-status{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.erro-validacao,.aviso-resultado{display:none}
+.erro-validacao.mostrar,.aviso-resultado.mostrar{
+  display:block;background:#FDF1EE;border:1px solid #E8BCB0;border-left:5px solid var(--vermelho);
+  border-radius:10px;padding:14px 18px;font-size:.9rem;color:#7A2A19;
+}
+.erro-validacao.mostrar{margin-top:18px}
+.aviso-resultado.mostrar{margin:0 0 22px}
+.erro-validacao ul{margin:6px 0 0 18px}
+.erro-validacao strong,.aviso-resultado strong{color:var(--vermelho)}
+
 /* ---- resumo em cards ---- */
 .rel-title{display:flex;align-items:center;gap:8px}
 .secao-titulo{font-family:'Archivo',sans-serif;font-weight:900;font-size:1.3rem;margin:38px 0 16px}
@@ -476,6 +488,10 @@ details.tecnico .proj{box-shadow:none;border:none;padding:0}
 </header>
 
 <div class="wrap">
+  <!-- Região de status só para leitores de tela: anuncia mudanças em uma frase,
+       em vez de narrar o relatório e a tabela de 60 parcelas inteiros. -->
+  <p class="sr-status" id="srStatus" role="status" aria-live="polite"></p>
+
   <div class="wizard">
     <div class="stepper">
       <div class="st ativo" data-step="1"><span class="n">1</span> Sua conta de luz</div>
@@ -638,6 +654,8 @@ details.tecnico .proj{box-shadow:none;border:none;padding:0}
     </div>
     <!-- fim etapa 2 -->
 
+    <div class="erro-validacao" id="erroValidacao" role="alert"></div>
+
     <div class="wizard-nav">
       <button type="button" class="btn-voltar" id="btnVoltar" style="visibility:hidden">← Voltar</button>
       <button type="button" class="btn-avancar" id="btnAvancar">Avançar →</button>
@@ -646,7 +664,7 @@ details.tecnico .proj{box-shadow:none;border:none;padding:0}
   </div>
 
   <!-- ================= DOCUMENTO CET ================= -->
-  <section id="secaoCET" aria-live="polite">
+  <section id="secaoCET">
     <div class="cet-doc">
       <div class="cet-cabecalho">
         <div>
@@ -707,9 +725,11 @@ details.tecnico .proj{box-shadow:none;border:none;padding:0}
   </section>
 
   <!-- ================= RELATÓRIO ================= -->
-  <section id="relatorio" aria-live="polite">
+  <section id="relatorio">
     <h2 class="rel-title">✅ Pronto! Veja o seu resultado</h2>
     <p class="rel-sub" id="relData"></p>
+
+    <div class="aviso-resultado" id="avisoResultado" role="alert"></div>
 
     <!-- RESUMO EM CARDS -->
     <div class="resumo">
@@ -814,8 +834,8 @@ details.tecnico .proj{box-shadow:none;border:none;padding:0}
     </details>
 
     <div class="acoes">
-      <button class="btn-print" id="btnImprimirRelatorio">🖨 Imprimir / salvar proposta em PDF</button>
-      <button class="btn-limpar" onclick="document.getElementById('relatorio').classList.remove('mostrar');window.scrollTo({top:0,behavior:'smooth'})">Nova simulação</button>
+      <button type="button" class="btn-print" id="btnImprimirRelatorio">🖨 Imprimir / salvar proposta em PDF</button>
+      <button type="button" class="btn-limpar" id="btnNovaSimulacao">Nova simulação</button>
     </div>
   </section>
 
@@ -849,8 +869,18 @@ $('btnBuscarTarifa').addEventListener('click', async ()=>{
     $('precoKwh').value = dado.tarifa_sugerida_com_impostos_kwh.toFixed(4);
     const [ai,am,ad] = (dado.vigencia_inicio||'').split('-');
     const dataFmt = (ai&&am&&ad) ? `${ad}/${am}/${ai}` : dado.vigencia_inicio;
-    nota.classList.add('tarifa-ok');
-    nota.innerHTML = `✅ Tarifa oficial ANEEL aplicada: R$ ${dado.tarifa_sugerida_com_impostos_kwh.toFixed(4)}/kWh (estimativa com impostos de RO sobre a tarifa homologada de ${dado.tarifa_base_kwh.toFixed(4)}/kWh, vigente desde ${dataFmt}). <a href="${dado.fonte_url}" target="_blank" rel="noopener">Ver fonte na ANEEL</a>. Você pode ajustar o valor manualmente se sua fatura for diferente.`;
+    const valor = `R$ ${dado.tarifa_sugerida_com_impostos_kwh.toFixed(4)}/kWh`;
+    const base = `${dado.tarifa_base_kwh.toFixed(4)}/kWh`;
+    const fonte = `<a href="${dado.fonte_url}" target="_blank" rel="noopener">Ver fonte na ANEEL</a>`;
+    if(dado.vigente === false){
+      // A tarifa mais recente da ANEEL não está em vigor hoje (reajuste com
+      // vigência futura ou homologação atrasada) — não apresentar como atual.
+      nota.classList.add('tarifa-erro');
+      nota.innerHTML = `⚠ <strong>Tarifa possivelmente desatualizada.</strong> ${dado.aviso || ''} Valor aplicado: ${valor}. ${fonte}. Confira o valor na sua fatura e ajuste o campo se necessário.`;
+    } else {
+      nota.classList.add('tarifa-ok');
+      nota.innerHTML = `✅ Tarifa oficial ANEEL aplicada: ${valor} (estimativa com impostos de RO sobre a tarifa homologada de ${base}, vigente desde ${dataFmt}). ${fonte}. Você pode ajustar o valor manualmente se sua fatura for diferente.`;
+    }
   } catch(err){
     nota.classList.add('tarifa-erro');
     nota.textContent = `⚠ Não foi possível buscar a tarifa oficial agora (${err.message}). O valor do campo continua editável manualmente.`;
@@ -1078,7 +1108,16 @@ $('btnEmitirCET').addEventListener('click', ()=>{
     `<strong>Documento de simulação.</strong> Não constitui proposta de crédito e não substitui o CET oficial fornecido pela instituição financeira, que pode incluir IOF, tributos e outras tarifas não previstas aqui. O campo "Valor da parcela" foi atualizado para <strong>${fmt(parcelaSimulacao)}</strong>${sistema==='sac'?' (média das parcelas, já que no SAC elas são decrescentes)':''}, que é o valor usado na simulação de economia solar.`;
 
   $('secaoCET').classList.add('mostrar');
+  anunciar(`Demonstrativo emitido: ${prazo} parcelas, CET de ${cetM===null?'não disponível':pct(cetM)} ao mês, total de ${fmt(totalPagar)}.`);
   $('secaoCET').scrollIntoView({behavior:'smooth',block:'start'});
+});
+
+$('btnNovaSimulacao').addEventListener('click', ()=>{
+  $('relatorio').classList.remove('mostrar');
+  $('secaoCET').classList.remove('mostrar');
+  $('avisoResultado').classList.remove('mostrar');
+  anunciar('Formulário reaberto para uma nova simulação.');
+  window.scrollTo({top:0,behavior:'smooth'});
 });
 
 $('btnImprimirRelatorio').addEventListener('click', ()=>{
@@ -1109,6 +1148,28 @@ function contaMes(consumo,producao,preco,fioBTar,minKwh,ilum,ano,degradFator){
   };
 }
 
+/** Bloqueia cenários que geram resultado sem sentido para o usuário final
+    (ex.: consumo zero faz a "economia" ficar negativa por causa da taxa mínima). */
+function validarEntradas(consumo, producao, preco){
+  const p = [];
+  if(consumo <= 0) p.push('Informe <strong>quanto você gasta de luz por mês</strong> (kWh) na etapa 1 — sem consumo não há economia a calcular.');
+  if(producao <= 0) p.push('Informe <strong>quanto o sistema vai gerar</strong> (kWh/mês) na etapa 2.');
+  if(preco <= 0) p.push('Informe o <strong>preço da energia</strong> (R$ por kWh) na etapa 1.');
+  const box = $('erroValidacao');
+  if(p.length){
+    box.innerHTML = `<strong>Faltam dados para simular:</strong><ul>${p.map(x=>`<li>${x}</li>`).join('')}</ul>`;
+    box.classList.add('mostrar');
+    anunciar('Não foi possível simular: faltam dados no formulário.');
+    box.scrollIntoView({behavior:'smooth',block:'center'});
+    return false;
+  }
+  box.classList.remove('mostrar');
+  return true;
+}
+
+/** Mensagem curta para leitores de tela (o relatório em si não é lido inteiro). */
+function anunciar(msg){ $('srStatus').textContent = msg; }
+
 function calcular(){
   const consumo=+$('consumo').value||0,
         producao=+$('producao').value||0,
@@ -1121,7 +1182,12 @@ function calcular(){
         degrad=(+$('degrad').value||0)/100,
         entrada=financiado?(+$('entrada').value||0):0,
         parcela=financiado?(+$('parcela').value||0):0,
-        prazo=financiado?(+$('prazo').value||0):0;
+        prazo=financiado?(+$('prazo').value||0):0,
+        // Tarifa de cadastro é desembolso do contrato: entra no custo do
+        // financiamento, senão o payback e a economia em 25 anos ficam otimistas.
+        tacFin=financiado?(+$('tarifaCadastro').value||0):0;
+
+  if(!validarEntradas(consumo, producao, preco)) return;
 
   const hoje = contaMes(consumo,producao,preco,fioBTar,minKwh,ilum,ANO_ATUAL,1);
 
@@ -1144,7 +1210,7 @@ function calcular(){
   /* --------- projeção mês a mês, 25 anos --------- */
   const meses = 25*12;
   let acSem=0, acCom=0, acEco=0, payMes=null;
-  const custoTotalFin = entrada + parcela*prazo;
+  const custoTotalFin = entrada + tacFin + parcela*prazo;
   const investRef = financiado ? custoTotalFin : valorProjeto;
   const serie=[]; // {mes, eco, liquido}
   for(let m=1;m<=meses;m++){
@@ -1154,7 +1220,7 @@ function calcular(){
     const degradFator = Math.pow(1-degrad,anosPassados);
     const c = contaMes(consumo,producao,preco*fatorPreco,fioBTar*fatorPreco,minKwh,ilum*fatorPreco,ano,degradFator);
     acSem+=c.semSolar; acCom+=c.comSolar; acEco+=(c.semSolar-c.comSolar);
-    const desembolso = financiado ? (entrada + parcela*Math.min(m,prazo)) : valorProjeto;
+    const desembolso = financiado ? (entrada + tacFin + parcela*Math.min(m,prazo)) : valorProjeto;
     const liquido = acEco - desembolso;
     if(payMes===null && liquido>=0) payMes=m;
     serie.push({m,acSem,acCom,acEco,liquido,desembolso});
@@ -1162,7 +1228,10 @@ function calcular(){
 
   if(payMes!==null){
     const a=Math.floor(payMes/12), me=payMes%12;
-    $('payback').textContent = a>0 ? `${a} ano${a>1?'s':''}${me?` e ${me} ${me>1?'meses':'mês'}`:''}` : `${me} meses`;
+    const parteMes = `${me} ${me>1?'meses':'mês'}`;
+    $('payback').textContent = a>0
+      ? `${a} ano${a>1?'s':''}${me?` e ${parteMes}`:''}`
+      : parteMes;
   } else {
     $('payback').textContent = 'acima de 25 anos';
   }
@@ -1171,8 +1240,23 @@ function calcular(){
   $('relData').textContent = `Simulação gerada em ${new Date().toLocaleDateString('pt-BR')} · Estado de Rondônia · Fio B ${ (FIOB_PCT(ANO_ATUAL)*100).toFixed(0)}% (Lei 14.300/2022)`;
 
   const pctReduz = hoje.semSolar>0 ? (ecoMes/hoje.semSolar*100) : 0;
+
+  // Este bloco explica apenas POR QUE a conta não zera; os valores e a leitura
+  // geral ficam no bloco "O que isso significa", para não repetir os números.
   $('explicaTexto').innerHTML =
-    `<strong>Em palavras simples:</strong> hoje sua conta é de <strong>${fmt(hoje.semSolar)}</strong>. Com o sistema solar, ela cai para <strong>${fmt(hoje.comSolar)}</strong> — uma redução de <strong>${pctReduz.toFixed(0)}%</strong>. A conta não zera porque a distribuidora continua cobrando a taxa mínima da sua ligação, a iluminação pública e o Fio B (o "pedágio" da rede criado pela Lei 14.300, que em ${ANO_ATUAL} é de ${(FIOB_PCT(ANO_ATUAL)*100).toFixed(0)}% e sobe até 100% em 2029). Mesmo assim, sobram <strong>${fmt(ecoMes)}</strong> no seu bolso todo mês — e esse valor cresce a cada reajuste da energia.`;
+    `<strong>Por que a conta não zera?</strong> Mesmo gerando a sua própria energia, a distribuidora continua cobrando três itens: a <strong>taxa mínima</strong> da sua ligação (${minKwh} kWh), a <strong>iluminação pública</strong> e o <strong>Fio B</strong> — uma espécie de "pedágio" pelo uso da rede, criado pela Lei 14.300, que em ${ANO_ATUAL} é de ${(FIOB_PCT(ANO_ATUAL)*100).toFixed(0)}% e sobe gradualmente até 100% em 2029. É por isso que a conta cai muito, mas não chega a zero.`;
+
+  /* --------- aviso quando o cenário não se sustenta --------- */
+  const avisoBox = $('avisoResultado');
+  if(ecoMes <= 0){
+    avisoBox.innerHTML = `<strong>Atenção: neste cenário o sistema solar não gera economia.</strong> Com o consumo informado (${consumo} kWh/mês), a taxa mínima de ${minKwh} kWh da sua ligação, a iluminação pública e o Fio B somam mais do que você paga hoje. Revise o consumo e o tipo de ligação — energia solar costuma valer a pena a partir de um consumo bem acima da taxa mínima.`;
+    avisoBox.classList.add('mostrar');
+  } else if(producao > consumo*1.3){
+    avisoBox.innerHTML = `<strong>Sistema superdimensionado.</strong> A geração informada (${producao} kWh/mês) é bem maior que o seu consumo (${consumo} kWh/mês). O excedente <em>não</em> aumenta a economia desta simulação — e ainda aumenta a cobrança de Fio B. Vale rever a proposta para um sistema mais próximo do seu consumo.`;
+    avisoBox.classList.add('mostrar');
+  } else {
+    avisoBox.classList.remove('mostrar');
+  }
 
   /* --------- bloco financiamento --------- */
   if(financiado){
@@ -1183,6 +1267,7 @@ function calcular(){
        <div class="linha-item"><span>Parcela do financiamento (${prazo}×)</span><span class="neg">− ${fmt(parcela)}</span></div>
        <div class="linha-item"><span><strong>Resultado por mês</strong></span><span class="${liquidoFin>=0?'pos':'neg'}">${liquidoFin>=0?'+ ':'− '}${fmt(Math.abs(liquidoFin))}</span></div>
        <div class="linha-item"><span>Entrada</span><span>${fmt(entrada)}</span></div>
+       ${tacFin>0?`<div class="linha-item"><span>Tarifa de cadastro (TAC)</span><span>${fmt(tacFin)}</span></div>`:''}
        <div class="linha-item"><span>Custo total financiado</span><span>${fmt(custoTotalFin)}</span></div>`;
     $('finDepois').innerHTML =
       `<div class="linha-item"><span>Parcela</span><span class="pos">R$ 0,00 — quitado ✓</span></div>
@@ -1217,7 +1302,7 @@ function calcular(){
   /* ===== camada de apresentação (didática) — NÃO altera nenhum cálculo acima ===== */
   const wp = +$('potenciaPlaca').value || 550;
   const est = estimarPlacas(producao, wp);
-  animarNum($('numPlacas'), est.placas, ' placas', 0);
+  animarNum($('numPlacas'), est.placas, est.placas===1 ? ' placa' : ' placas', 0);
   $('miniPlacas').textContent = `potência ≈ ${est.kwp.toLocaleString('pt-BR',{maximumFractionDigits:2})} kWp`;
   animarNum($('numGeracao'), producao, ' kWh', 0);
   animarNum($('numReducao'), Math.round(pctReduz), '%', 0);
@@ -1235,10 +1320,12 @@ function calcular(){
   },40);
 
   const cobTxt = cobertura>=95?'praticamente todo o seu consumo':cobertura>=75?'a maior parte do seu consumo':'boa parte do seu consumo';
+  const placasTxt = `<strong>${est.placas} placa${est.placas===1?'':'s'} solar${est.placas===1?'':'es'}</strong>`;
   $('interpretaTexto').innerHTML =
-    `Com aproximadamente <strong>${est.placas} placas solares</strong>, seu sistema gera cerca de <strong>${producao} kWh por mês</strong> e cobre ${cobTxt}. Sua conta de luz cai por volta de <strong>${pctReduz.toFixed(0)}%</strong> — de ${fmt(hoje.semSolar)} para ${fmt(hoje.comSolar)} —, o que representa uma economia de até <strong>${fmt(ecoMes)} por mês</strong>. Com o reajuste da energia ao longo dos anos, essa economia tende a crescer${payMes!==null?`, e o sistema se paga em <strong>${$('payback').textContent}</strong>`:''}.`;
+    `Com aproximadamente ${placasTxt}, seu sistema gera cerca de <strong>${producao} kWh por mês</strong> e cobre ${cobTxt}. Sua conta de luz cai por volta de <strong>${pctReduz.toFixed(0)}%</strong> — de ${fmt(hoje.semSolar)} para ${fmt(hoje.comSolar)} —, o que representa uma economia de até <strong>${fmt(ecoMes)} por mês</strong>. Com o reajuste da energia ao longo dos anos, essa economia tende a crescer${payMes!==null?`, e o sistema se paga em <strong>${$('payback').textContent}</strong>`:''}.`;
 
   $('relatorio').classList.add('mostrar');
+  anunciar(`Resultado gerado: economia de ${fmt(ecoMes)} por mês, ${est.placas} placa${est.placas===1?'':'s'}, retorno em ${$('payback').textContent}.`);
   $('relatorio').scrollIntoView({behavior:'smooth',block:'start'});
 }
 
@@ -1287,7 +1374,9 @@ const PR_SIST = 0.78;      // desempenho médio do sistema (estimativa)
 const M2_POR_PLACA = 2.5;  // área média ocupada por placa, em m² (estimativa)
 function estimarPlacas(prodMes, wp){
   const gerPlaca = (wp/1000)*HSP_RO*30*PR_SIST;          // kWh por placa/mês
-  const placas = Math.max(1, Math.ceil((prodMes||0)/gerPlaca));
+  // Sem geração informada não há placas — antes o piso de 1 fazia o cartão
+  // mostrar "1 placa" para um sistema que gera zero.
+  const placas = prodMes > 0 ? Math.ceil(prodMes/gerPlaca) : 0;
   return { placas, kwp: placas*wp/1000, area: placas*M2_POR_PLACA, gerPlaca };
 }
 function animarNum(el, alvo, sufixo, dec){

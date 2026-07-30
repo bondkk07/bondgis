@@ -70,7 +70,6 @@ ALLOWED_PROXY_HOSTS = {
     "terrabrasilis.dpi.inpe.br", "geoinfo.dados.embrapa.br",
     "geoportal.sedam.ro.gov.br", "labdez.mma.gov.br",
     "pamgia.ibama.gov.br", "tiles.maps.eox.at",
-    "dadosabertos.aneel.gov.br",
 }
 
 settings = get_settings()
@@ -130,6 +129,23 @@ def _fetch_allowlisted(url: str, timeout: int = 60,
             raise HTTPException(status_code=502, detail=f"Falha ao acessar a fonte: {exc}")
     except requests.RequestException as exc:
         raise HTTPException(status_code=502, detail=f"Falha ao acessar a fonte: {exc}")
+
+
+def _fetch_aneel(url: str, timeout: int = 20) -> requests.Response:
+    """GET na API de dados abertos da ANEEL, com verificação de TLS obrigatória.
+
+    Deliberadamente NÃO usa _fetch_allowlisted: aquele caminho tem fallback para
+    a sessão de TLS legado com verify=False, aceitável para GeoServers gov-br que
+    servem geometria, mas não para um número que vai alimentar cálculo financeiro.
+    Também mantém a ANEEL fora da allowlist do /api/proxy, para não abrir o proxy
+    genérico para esse host."""
+    host = (urlparse(url).hostname or "").lower()
+    if host != tarifas.ANEEL_HOST:
+        raise HTTPException(status_code=400, detail=f"URL fora do domínio da ANEEL: {host}")
+    try:
+        return requests.get(url, timeout=timeout, headers={"User-Agent": "BondGis/1.0"})
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"Falha ao acessar a ANEEL: {exc}")
 
 
 @app.get("/api/proxy")
@@ -192,7 +208,7 @@ def tarifa_energia(
         return TarifaEnergiaResponse(**cache_hit)
 
     url = tarifas.montar_url_aneel(distribuidora, subgrupo, classe, modalidade)
-    r = _fetch_allowlisted(url, timeout=20)
+    r = _fetch_aneel(url, timeout=20)
     if r.status_code != 200:
         raise HTTPException(status_code=502, detail=f"ANEEL respondeu HTTP {r.status_code}")
     try:

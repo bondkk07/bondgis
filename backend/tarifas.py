@@ -9,6 +9,7 @@ de ICMS/PIS/COFINS de Rondônia já usado como padrão no simulador solar — n�
 substitui a tarifa real da fatura, que pode variar por bandeira, revisões
 extraordinárias ou componentes adicionais não presentes neste dataset.
 """
+import datetime
 import json
 import time
 from typing import Any, Dict, Optional
@@ -22,6 +23,13 @@ ANEEL_RESOURCE_TARIFAS = "fcf2906c-7c32-4b9b-a637-054e7a5234f4"
 ICMS_RO = 0.195
 PIS_RO = 0.0165
 COFINS_RO = 0.0760
+
+# Faixa plausível para uma tarifa B1 em R$/kWh (sem impostos). Serve de rede de
+# segurança: se a ANEEL mudar o formato do número (ex.: passar a usar ponto como
+# separador de milhar), o erro de escala aparece aqui em vez de virar um preço
+# de energia 1000x errado no simulador.
+TARIFA_MIN_KWH = 0.05
+TARIFA_MAX_KWH = 3.00
 
 _CACHE_TTL_S = 12 * 3600  # tarifas só mudam por resolução ANEEL (raro em <12h)
 _cache: Dict[str, tuple] = {}  # chave -> (timestamp, dado)
@@ -85,17 +93,49 @@ def processar_resposta(payload: Dict[str, Any], sig_agente: str, subgrupo: str,
 
     candidatos = [r for r in registros if eh_padrao(r)] or registros
     candidatos.sort(key=lambda r: r.get("DatInicioVigencia") or "", reverse=True)
-    registro = candidatos[0]
+
+    # Prefere a tarifa efetivamente em vigor hoje. Ordenar por data de início e
+    # pegar a primeira não basta: a ANEEL pode publicar reajuste com vigência
+    # futura, ou a homologação seguinte pode atrasar e deixar só tarifa expirada.
+    hoje = datetime.date.today().isoformat()
+
+    def em_vigor(r: Dict[str, Any]) -> bool:
+        ini = (r.get("DatInicioVigencia") or "")[:10]
+        fim = (r.get("DatFimVigencia") or "")[:10]
+        return bool(ini) and ini <= hoje and (not fim or hoje <= fim)
+
+    vigentes = [r for r in candidatos if em_vigor(r)]
+    if vigentes:
+        registro, vigente, aviso = vigentes[0], True, None
+    else:
+        registro = candidatos[0]
+        vigente = False
+        ini = (registro.get("DatInicioVigencia") or "?")[:10]
+        fim = (registro.get("DatFimVigencia") or "")[:10]
+        aviso = (
+            f"Nenhuma tarifa em vigor hoje ({hoje}) foi encontrada para esta consulta. "
+            f"O valor retornado é da vigência {ini}"
+            f"{' a ' + fim if fim else ''} — confira a tarifa atual na sua fatura."
+        )
 
     vlr_te = _parse_valor(registro.get("VlrTE"))
     vlr_tusd = _parse_valor(registro.get("VlrTUSD"))
     tarifa_base = (vlr_te + vlr_tusd) / 1000  # R$/MWh -> R$/kWh
+
+    if not (TARIFA_MIN_KWH <= tarifa_base <= TARIFA_MAX_KWH):
+        raise ValueError(
+            f"Tarifa fora da faixa plausível: {tarifa_base:.5f} R$/kWh "
+            f"(TE={vlr_te}, TUSD={vlr_tusd} R$/MWh). O formato do dado da ANEEL "
+            f"pode ter mudado — verifique antes de usar este valor."
+        )
 
     total_aliquotas = ICMS_RO + PIS_RO + COFINS_RO
     tarifa_com_impostos = tarifa_base / (1 - total_aliquotas) if total_aliquotas < 1 else tarifa_base
 
     return {
         "distribuidora": sig_agente,
+        "vigente": vigente,
+        "aviso": aviso,
         "cnpj": registro.get("NumCNPJDistribuidora"),
         "subgrupo": registro.get("DscSubGrupo"),
         "classe": registro.get("DscClasse"),

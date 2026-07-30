@@ -93,6 +93,8 @@ class AliquotasTarifa(BaseModel):
 
 class TarifaEnergiaResponse(BaseModel):
     distribuidora: str
+    vigente: bool = True
+    aviso: Optional[str] = None
     cnpj: Optional[str] = None
     subgrupo: Optional[str] = None
     classe: Optional[str] = None
