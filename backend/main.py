@@ -68,6 +68,7 @@ ALLOWED_PROXY_HOSTS = {
     "terrabrasilis.dpi.inpe.br", "geoinfo.dados.embrapa.br",
     "geoportal.sedam.ro.gov.br", "labdez.mma.gov.br",
     "pamgia.ibama.gov.br", "tiles.maps.eox.at",
+    "storage.googleapis.com",   # MapBiomas (verificação de status via /api/ping)
 }
 
 settings = get_settings()
@@ -143,23 +144,40 @@ def proxy(url: str = Query(..., description="URL pública (host na allowlist) a 
 
 
 @app.get("/api/ping")
-def ping(url: str = Query(..., description="URL pública (host na allowlist) a testar")):
-    """Testa server-side se uma fonte externa responde — do MESMO caminho por
-    onde o app a acessa (backend), sem os falsos negativos do ping no-cors do
-    navegador. Qualquer resposta HTTP (mesmo 3xx/4xx) = servidor no ar."""
+def ping(
+    url: str = Query(..., description="URL da CONSULTA REAL a testar (ex.: WFS GetCapabilities)"),
+    contains: str = Query("", description="Marcador que deve existir no corpo para a consulta valer como OK"),
+):
+    """Testa se a CONSULTA de uma fonte externa realmente funciona — não apenas
+    se o servidor responde na raiz. Online exige HTTP < 400, o corpo NÃO ser uma
+    página de erro do serviço e (se informado) conter o marcador esperado.
+    Assim o painel reflete a realidade da consulta que o app usa."""
     import time
     host = (urlparse(url).hostname or "").lower()
     if host not in ALLOWED_PROXY_HOSTS:
         raise HTTPException(status_code=403, detail=f"Host não autorizado: {host}")
     t0 = time.perf_counter()
     try:
-        r = _fetch_allowlisted(url, timeout=15, allow_redirects=False)
-        return {"online": True, "status": r.status_code,
-                "ms": round((time.perf_counter() - t0) * 1000)}
+        r = _fetch_allowlisted(url, timeout=20, allow_redirects=True)
     except HTTPException as exc:
         return {"online": False, "status": None,
                 "ms": round((time.perf_counter() - t0) * 1000),
-                "detalhe": str(exc.detail)[:140]}
+                "detalhe": str(exc.detail)[:160]}
+    ms = round((time.perf_counter() - t0) * 1000)
+    corpo = r.text[:20000]
+    corpo_lower = corpo.lower()
+    # marcadores de erro de serviço OGC/ArcGIS (respondem HTTP 200 com erro no corpo)
+    erro_servico = any(m in corpo_lower for m in
+                       ("serviceexceptionreport", "exceptionreport", '"error"'))
+    if r.status_code >= 400:
+        return {"online": False, "status": r.status_code, "ms": ms,
+                "detalhe": f"HTTP {r.status_code}"}
+    if contains and contains.lower() not in corpo_lower:
+        det = "erro do serviço no corpo" if erro_servico else "resposta inesperada (sem o conteúdo esperado)"
+        return {"online": False, "status": r.status_code, "ms": ms, "detalhe": det}
+    if erro_servico and not contains:
+        return {"online": False, "status": r.status_code, "ms": ms, "detalhe": "erro do serviço no corpo"}
+    return {"online": True, "status": r.status_code, "ms": ms}
 
 
 @app.get("/api/health", response_model=HealthResponse)

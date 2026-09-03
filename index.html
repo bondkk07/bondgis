@@ -125,6 +125,7 @@ header .spacer{flex:1}
 .status-dot.online{background:var(--success);box-shadow:0 0 0 3px var(--success-soft)}
 .status-dot.offline{background:var(--danger);box-shadow:0 0 0 3px var(--danger-soft)}
 .status-dot.degradado{background:var(--warning);box-shadow:0 0 0 3px var(--warning-soft)}
+.status-dot.desconhecido{background:var(--text-tertiary);box-shadow:0 0 0 3px var(--surface-hover)}
 .status-dot.verificando{background:var(--accent);animation:pulseDot 1s ease-in-out infinite}
 @keyframes pulseDot{0%,100%{opacity:1}50%{opacity:.35}}
 .mobile-menu-btn{display:none}
@@ -288,6 +289,7 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
 .status-item .txt.offline{color:var(--danger)}
 .status-item .txt.degradado{color:var(--warning)}
 .status-item .txt.verificando{color:var(--accent)}
+.status-item .txt.desconhecido{color:var(--text-tertiary)}
 @keyframes modalFade{from{opacity:0}to{opacity:1}}
 @keyframes modalScale{from{opacity:0;transform:scale(.96) translateY(6px)}to{opacity:1;transform:scale(1) translateY(0)}}
 
@@ -666,12 +668,13 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
       <button class="btn sec" id="btn-status-refresh" onclick="verificarTodosStatus()">↻ Verificar agora</button>
     </div>
     <p class="status-resumo" id="status-resumo">Verificando…</p>
-    <p class="hint" style="margin-top:0">Como dependemos de bases públicas de terceiros, quedas ou lentidão
-      nesses serviços podem causar dados incompletos ou inconsistentes numa análise — confira aqui antes de
-      desconfiar do resultado. Testa apenas se o servidor responde (não valida a consulta específica).
-      Com o <b>backend no ar</b>, as fontes são checadas pelo mesmo caminho que o app usa (proxy do
-      backend) — resultado confiável. <b>Sem o backend</b>, a checagem é direta no navegador e pode marcar
-      como "fora do ar" servidores que na verdade estão no ar (falso negativo por CORS/TLS).</p>
+    <p class="hint" style="margin-top:0">Como dependemos de bases públicas de terceiros, quedas nesses
+      serviços são a causa mais comum de dados incompletos ou inconsistentes numa análise — confira aqui
+      antes de desconfiar do resultado. Cada item testa a <b>consulta real</b> que o app usa (o endpoint
+      WFS/ArcGIS, não a raiz do servidor): só marca <b>Online</b> se a resposta contém o conteúdo esperado
+      e não é uma página de erro. A verificação roda no <b>backend</b> (o navegador não consegue ler essas
+      respostas por CORS); <b>sem o backend</b>, os itens aparecem como <b>Não verificável</b> — nunca um
+      "online" falso.</p>
     <div id="status-lista"></div>
     <div style="display:flex;gap:8px;margin-top:14px">
       <button class="btn sec" onclick="document.getElementById('modal-status').classList.remove('on')">Fechar</button>
@@ -2270,52 +2273,53 @@ function salvarCfg(){
 
 /* ══ STATUS DAS FONTES DE DADOS EXTERNAS ═════════════════════════════════
    Como o sistema depende de bases públicas de terceiros (SICAR, MapBiomas,
-   INPE, IBAMA, FUNAI…), quedas ou lentidão nesses serviços são a causa mais
-   comum de resultado incompleto/inconsistente numa análise. Este painel
-   testa, em tempo real, se cada fonte responde — um "ping" via fetch em
-   modo no-cors: não lemos o conteúdo (a maioria não libera CORS para
-   requisições simples do navegador), só se a rede respondeu ou não.
-   Isso mede alcançabilidade do host, não valida a consulta específica. */
+   INPE, IBAMA, FUNAI…), quedas nesses serviços são a causa mais comum de
+   resultado incompleto/inconsistente. Este painel testa a CONSULTA REAL de
+   cada fonte (o endpoint WFS/ArcGIS que o app efetivamente usa), server-side
+   pelo backend, exigindo que a resposta contenha o conteúdo esperado ('marca')
+   e não seja uma página de erro. Assim reflete a realidade da consulta — não
+   apenas se a raiz do servidor responde. Sem o backend, os itens ficam
+   "não verificável" (o navegador não consegue ler essas respostas por CORS). */
 const FONTES_STATUS = [
-  {id:'sicar_area',     nome:'SICAR — Área do Imóvel',            grupo:'Importação CAR',   url: 'https://geoserver.car.gov.br'},
-  {id:'sicar_consulta', nome:'SICAR — Camadas subsidiárias',       grupo:'Importação CAR',   url: 'https://consulta.car.gov.br'},
-  {id:'mapbiomas',      nome:'MapBiomas (Google Cloud Storage)',   grupo:'MapBiomas',        url: 'https://storage.googleapis.com/mapbiomas-public/'},
-  {id:'backend_ee',     nome:'Backend / Google Earth Engine',      grupo:'Satélite & Análise', especial:'backend'},
-  {id:'ibama',          nome:'IBAMA — Embargos',                  grupo:'Camadas Externas',  url: 'https://pamgia.ibama.gov.br'},
-  {id:'funai',          nome:'FUNAI — Terras Indígenas',           grupo:'Camadas Externas',  url: 'https://geoserver.funai.gov.br'},
-  {id:'iphan',          nome:'IPHAN — Sítios Arqueológicos',       grupo:'Camadas Externas',  url: 'https://geoserver.iphan.gov.br'},
-  {id:'ibge',           nome:'IBGE — Malha Municipal',             grupo:'Camadas Externas',  url: 'https://geoservicos.ibge.gov.br'},
-  {id:'sema_mt',        nome:'SEMA-MT — APF / Embargos',           grupo:'Camadas Externas',  url: 'https://geo.sema.mt.gov.br'},
-  {id:'icmbio',         nome:'ICMBio — Embargos / Autos (INDE)',   grupo:'Camadas Externas',  url: 'https://geoservicos.inde.gov.br'},
-  {id:'sfb',            nome:'SFB — Florestas Públicas',           grupo:'Camadas Externas',  url: 'https://smapas.florestal.gov.br'},
-  {id:'inpe_prodes',    nome:'INPE / PRODES (Terrabrasilis)',      grupo:'Alertas / PRODES',  url: 'https://terrabrasilis.dpi.inpe.br'},
-  {id:'embrapa',        nome:'EMBRAPA — Áreas Atribuídas',         grupo:'Camadas Externas',  url: 'https://geoinfo.dados.embrapa.br'},
-  {id:'eox',            nome:'EOX — Mosaicos Sentinel-2',          grupo:'Mosaicos',          url: 'https://tiles.maps.eox.at'},
-  {id:'sedam_ro',       nome:'SEDAM-RO — ZSEE',                    grupo:'Camadas Externas',  url: 'https://geoportal.sedam.ro.gov.br'},
-  {id:'mma_mcr',        nome:'MMA — Listas MCR/PRODES',            grupo:'Sobreposição',      url: 'https://labdez.mma.gov.br'},
+  {id:'sicar_area',     nome:'SICAR — Área do Imóvel',           grupo:'Importação CAR',     marca:'featuretype',
+   probe:'https://geoserver.car.gov.br/geoserver/sicar/ows?service=WFS&request=GetCapabilities'},
+  {id:'sicar_consulta', nome:'SICAR — Camadas subsidiárias',     grupo:'Importação CAR',     marca:'featuretype',
+   probe:'https://consulta.car.gov.br/geoserver/ows?service=WFS&version=2.0.0&request=GetCapabilities'},
+  {id:'mapbiomas',      nome:'MapBiomas (Google Cloud Storage)', grupo:'MapBiomas',          marca:'kind',
+   probe:'https://storage.googleapis.com/storage/v1/b/mapbiomas-public/o?prefix=initiatives/brasil/collection_10/&maxResults=1'},
+  {id:'backend_ee',     nome:'Backend / Google Earth Engine',    grupo:'Satélite & Análise', especial:'backend'},
+  {id:'ibama',          nome:'IBAMA — Embargos',                 grupo:'Camadas Externas',   marca:'fields',
+   probe:'https://pamgia.ibama.gov.br/server/rest/services/01_Publicacoes_Bases/adm_embargos_ibama_a/MapServer/0?f=json'},
+  {id:'funai',          nome:'FUNAI — Terras Indígenas',         grupo:'Camadas Externas',   marca:'featuretype',
+   probe:'https://geoserver.funai.gov.br/geoserver/Funai/wfs?service=WFS&request=GetCapabilities'},
+  {id:'iphan',          nome:'IPHAN — Sítios Arqueológicos',     grupo:'Camadas Externas',   marca:'featuretype',
+   probe:'https://geoserver.iphan.gov.br/geoserver/SICG/ows?service=WFS&request=GetCapabilities'},
+  {id:'ibge',           nome:'IBGE — Malha Municipal',           grupo:'Camadas Externas',   marca:'featuretype',
+   probe:'https://geoservicos.ibge.gov.br/geoserver/ows?service=WFS&request=GetCapabilities'},
+  {id:'sema_mt',        nome:'SEMA-MT — APF / Embargos',         grupo:'Camadas Externas',   marca:'featuretype',
+   probe:'https://geo.sema.mt.gov.br/geoserver/wfs?service=WFS&request=GetCapabilities'},
+  {id:'icmbio',         nome:'ICMBio — Embargos / Autos (INDE)', grupo:'Camadas Externas',   marca:'featuretype',
+   probe:'https://geoservicos.inde.gov.br/geoserver/ICMBio/wfs?service=WFS&request=GetCapabilities'},
+  {id:'sfb',            nome:'SFB — Florestas Públicas',         grupo:'Camadas Externas',   marca:'currentversion',
+   probe:'https://smapas.florestal.gov.br/server/rest/services?f=json'},
+  {id:'inpe_prodes',    nome:'INPE / PRODES (Terrabrasilis)',    grupo:'Alertas / PRODES',   marca:'featuretype',
+   probe:'https://terrabrasilis.dpi.inpe.br/geoserver/prodes-legal-amz/yearly_deforestation/ows?service=WFS&request=GetCapabilities'},
+  {id:'embrapa',        nome:'EMBRAPA — Áreas Atribuídas',       grupo:'Camadas Externas',   marca:'featuretype',
+   probe:'https://geoinfo.dados.embrapa.br/geoserver/wfs?service=WFS&request=GetCapabilities'},
+  {id:'eox',            nome:'EOX — Mosaicos Sentinel-2',        grupo:'Mosaicos',           marca:'getmap',
+   probe:'https://tiles.maps.eox.at/wms?service=WMS&request=GetCapabilities'},
+  {id:'sedam_ro',       nome:'SEDAM-RO — ZSEE',                  grupo:'Camadas Externas',   marca:'featuretype',
+   probe:'https://geoportal.sedam.ro.gov.br/geoserver/ows?service=WFS&request=GetCapabilities'},
+  {id:'mma_mcr',        nome:'MMA — Listas MCR/PRODES',          grupo:'Sobreposição',       marca:'currentversion',
+   probe:'https://labdez.mma.gov.br/server/rest/services?f=json'},
 ];
-let statusFontes = {};   // id -> {status:'verificando'|'online'|'offline'|'degradado', ms, detalhe}
-
-async function pingFonte(url, timeoutMs=7000){
-  const inicio = performance.now();
-  const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), timeoutMs);
-  try{
-    // no-cors: não conseguimos ler a resposta, mas a promise só resolve se
-    // a rede de fato respondeu (DNS + conexão + handshake ok).
-    await fetch(url, {mode:'no-cors', cache:'no-store', signal: ctl.signal});
-    return {status:'online', ms: Math.round(performance.now() - inicio)};
-  } catch(e){
-    const motivo = e.name === 'AbortError' ? 'tempo esgotado' : 'sem resposta';
-    return {status:'offline', ms: Math.round(performance.now() - inicio), detalhe: motivo};
-  } finally { clearTimeout(t); }
-}
+let statusFontes = {};   // id -> {status:'verificando'|'online'|'offline'|'desconhecido', ms, detalhe}
 
 async function pingBackend(){
   if(!cfg.apiBase) return {status:'offline', detalhe:'Backend não configurado em Configurações'};
   const inicio = performance.now();
   const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), 8000);
+  const t = setTimeout(() => ctl.abort(), 10000);
   try{
     const resp = await fetch(cfg.apiBase + '/api/health', {signal: ctl.signal, cache:'no-store'});
     const ms = Math.round(performance.now() - inicio);
@@ -2327,28 +2331,23 @@ async function pingBackend(){
   } finally { clearTimeout(t); }
 }
 
-// Hosts que o app acessa VIA proxy do backend (espelha a allowlist do backend).
-// Um ping no-cors do navegador nesses hosts dá falso negativo (TLS/redirect),
-// então, quando o backend está no ar, o status vem dele (caminho real do app).
-const HOSTS_VIA_BACKEND = new Set(['consulta.car.gov.br','geoserver.car.gov.br',
-  'geoserver.funai.gov.br','geoserver.iphan.gov.br','geoservicos.ibge.gov.br',
-  'geo.sema.mt.gov.br','geoservicos.inde.gov.br','smapas.florestal.gov.br',
-  'terrabrasilis.dpi.inpe.br','geoinfo.dados.embrapa.br','geoportal.sedam.ro.gov.br',
-  'labdez.mma.gov.br','pamgia.ibama.gov.br','tiles.maps.eox.at']);
-function hostDe(url){ try{ return new URL(url).hostname.toLowerCase(); } catch{ return ''; } }
-
-async function pingViaBackend(url){
+// Testa a CONSULTA REAL da fonte via /api/ping do backend (server-side, lê o
+// corpo e exige o marcador esperado). Reflete se a consulta que o app usa
+// realmente funciona — não só se a raiz do servidor responde.
+async function pingConsulta(f){
   const inicio = performance.now();
   const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), 22000);
+  const t = setTimeout(() => ctl.abort(), 30000);
   try{
-    const resp = await fetch(cfg.apiBase + '/api/ping?url=' + encodeURIComponent(url),
-      {signal: ctl.signal, cache:'no-store'});
+    const u = cfg.apiBase + '/api/ping?url=' + encodeURIComponent(f.probe) +
+      (f.marca ? '&contains=' + encodeURIComponent(f.marca) : '');
+    const resp = await fetch(u, {signal: ctl.signal, cache:'no-store'});
     const j = await resp.json();
-    if(j.online) return {status:'online', ms: j.ms, detalhe:`via backend · HTTP ${j.status}`};
-    return {status:'offline', ms: j.ms, detalhe: j.detalhe || 'sem resposta (via backend)'};
+    if(j.online) return {status:'online', ms: j.ms, detalhe:`consulta OK · HTTP ${j.status}`};
+    return {status:'offline', ms: j.ms, detalhe: j.detalhe || 'consulta falhou'};
   } catch(e){
-    return {status:'offline', ms: Math.round(performance.now() - inicio), detalhe:'backend não respondeu'};
+    const motivo = e.name === 'AbortError' ? 'tempo esgotado' : 'backend não respondeu';
+    return {status:'offline', ms: Math.round(performance.now() - inicio), detalhe: motivo};
   } finally { clearTimeout(t); }
 }
 
@@ -2358,10 +2357,12 @@ async function verificarFonte(f, backendOnline=false){
   let resultado;
   if(f.especial === 'backend'){
     resultado = await pingBackend();
-  } else if(backendOnline && cfg.apiBase && HOSTS_VIA_BACKEND.has(hostDe(f.url))){
-    resultado = await pingViaBackend(f.url);
+  } else if(backendOnline && cfg.apiBase){
+    resultado = await pingConsulta(f);
   } else {
-    resultado = await pingFonte(f.url);            // no-cors (MapBiomas tem CORS; ou fallback sem backend)
+    // Sem backend, o navegador não consegue LER as respostas (CORS) — não dá
+    // para afirmar se a consulta funciona. Honesto: não verificável.
+    resultado = {status:'desconhecido', detalhe:'não verificável sem o backend'};
   }
   statusFontes[f.id] = resultado;
   renderStatusFontes();
@@ -2370,11 +2371,11 @@ async function verificarFonte(f, backendOnline=false){
 async function verificarTodosStatus(){
   const btn = $('btn-status-refresh');
   if(btn) btn.disabled = true;
-  // 1. Backend primeiro — define se dá para checar os demais pelo caminho real.
+  // 1. Backend primeiro — sem ele nenhuma consulta externa pode ser lida (CORS).
   const fBackend = FONTES_STATUS.find(f => f.especial === 'backend');
   if(fBackend) await verificarFonte(fBackend);
   const backendOnline = statusFontes[fBackend?.id]?.status === 'online';
-  // 2. Demais fontes (via backend quando possível; senão, ping no-cors direto).
+  // 2. Demais fontes: consulta real via backend, ou "não verificável" sem ele.
   await Promise.allSettled(
     FONTES_STATUS.filter(f => f.especial !== 'backend').map(f => verificarFonte(f, backendOnline)));
   if(btn) btn.disabled = false;
@@ -2389,7 +2390,8 @@ function renderStatusFontes(){
     html += `<div class="status-grupo-tit">${esc(grupo)}</div>`;
     for(const f of fontes){
       const r = statusFontes[f.id] || {status:'verificando'};
-      const rotulo = {online:'Online', offline:'Fora do ar', degradado:'Degradado', verificando:'Verificando…'}[r.status];
+      const rotulo = {online:'Online', offline:'Fora do ar', degradado:'Degradado',
+        desconhecido:'Não verificável', verificando:'Verificando…'}[r.status] || r.status;
       html += `<div class="status-item">
         <span class="status-dot ${r.status}"></span>
         <span class="nome">${esc(f.nome)}${r.detalhe ? ` <span class="meta">· ${esc(r.detalhe)}</span>` : ''}</span>
@@ -2406,20 +2408,29 @@ function renderStatusFontes(){
   const vals = Object.values(statusFontes);
   const online = vals.filter(v => v.status === 'online').length;
   const offline = vals.filter(v => v.status === 'offline').length;
+  const desconhecido = vals.filter(v => v.status === 'desconhecido').length;
   const verificando = vals.filter(v => v.status === 'verificando').length;
   const resumo = $('status-resumo');
   if(resumo){
-    resumo.textContent = verificando > 0
-      ? `Verificando ${verificando} de ${total}…`
-      : `${online} de ${total} fontes online` + (offline ? ` · ${offline} fora do ar` : '');
+    if(verificando > 0){
+      resumo.textContent = `Verificando ${verificando} de ${total}…`;
+    } else if(desconhecido > 0 && online <= 1){
+      resumo.textContent = `Backend fora — ${desconhecido} fonte(s) não verificável(is) sem ele.`;
+    } else {
+      resumo.textContent = `${online} de ${total} com consulta OK` +
+        (offline ? ` · ${offline} fora do ar` : '') +
+        (desconhecido ? ` · ${desconhecido} não verificável(is)` : '');
+    }
   }
 
   const dotHeader = $('status-dot-header'), txtHeader = $('status-texto-header');
   if(dotHeader && txtHeader){
     let classe = 'verificando', texto = 'Status';
     if(vals.length === total && verificando === 0){
-      classe = offline > 0 ? (offline >= total/2 ? 'offline' : 'degradado') : 'online';
-      texto = `${online}/${total}`;
+      if(offline > 0) classe = (offline >= total/2 ? 'offline' : 'degradado');
+      else if(desconhecido > 0) classe = 'desconhecido';
+      else classe = 'online';
+      texto = offline ? `${offline} fora` : `${online}/${total}`;
     }
     dotHeader.className = 'status-dot ' + classe;
     txtHeader.textContent = texto;
