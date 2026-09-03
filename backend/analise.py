@@ -53,7 +53,7 @@ CRUZAMENTOS_META = {
     2: ("Reserva Legal × vegetação existente", "#d7301f"),
     3: ("APP × ocupação observada", "#b30000"),
     4: ("Vegetação Nativa declarada × cobertura atual", "#f2c744"),
-    5: ("Vegetação nativa histórica × supressão recente", "#7f0000"),
+    5: ("Vegetação nativa histórica × cobertura atual (indício de alteração)", "#7f0000"),
 }
 
 
@@ -256,7 +256,8 @@ def _mod_cruzamentos_score(ctx):
         sent_prod, _dentro(car["area_consolidada"]),
         "Avalia se a área com uso produtivo observado (agricultura + pastagem, "
         "Sentinel-2) está contida na Área Consolidada declarada no CAR. "
-        "Divergente = uso produtivo fora da área consolidada (inconsistência).")
+        "Divergente = uso produtivo fora da área consolidada declarada — "
+        "indício a verificar.")
 
     # C2 — Reserva Legal × vegetação existente
     rl = car["reserva_legal"]
@@ -277,28 +278,31 @@ def _mod_cruzamentos_score(ctx):
         rl, _dentro(rl), sent_veg,
         "Avalia se a Reserva Legal declarada mantém cobertura vegetal "
         "(floresta ou vegetação secundária no Sentinel-2). Divergente = "
-        "porção da RL sem vegetação (déficit).", extra_rl)
+        "área da RL declarada sem cobertura vegetal detectada — possível "
+        "passivo de cobertura, requer verificação.", extra_rl)
 
     # C3 — APP × ocupação observada
     add(3, ["APP (CAR)"], ["Sentinel-2 (uso atual)"],
         car["app"], _dentro(car["app"]), sent_ant.Not(),
         "Avalia se a APP declarada está livre de uso antrópico (solo exposto, "
         "agricultura, pastagem, infraestrutura). Água e vegetação contam como "
-        "conformes. Divergente = APP antropizada.")
+        "conformes. Divergente = APP com uso antrópico detectado — triagem "
+        "preliminar, requer verificação.")
 
     # C4 — Vegetação Nativa declarada × cobertura atual
     add(4, ["Vegetação Nativa / Remanescente (CAR)"], ["Sentinel-2 (cobertura atual)"],
         car["vegetacao_nativa"], _dentro(car["vegetacao_nativa"]), sent_veg,
         "Avalia se os polígonos declarados como vegetação nativa/remanescente "
-        "ainda apresentam cobertura vegetal no Sentinel-2. Divergente = perda "
-        "de vegetação em área declarada como nativa.")
+        "ainda apresentam cobertura vegetal no Sentinel-2. Divergente = indício "
+        "de alteração da cobertura em área declarada como nativa — a verificar.")
 
     # C5 — Vegetação nativa histórica × supressão recente
     add(5, [f"MapBiomas {ctx['ano_hist']} (nativa)"], ["Sentinel-2 (uso atual)"],
         imovel, mb_nat_hist, sent_ant.Not(),
         f"Avalia se as áreas que eram vegetação nativa no MapBiomas {ctx['ano_hist']} "
         "continuam sem uso antrópico hoje (Sentinel-2). Divergente = indício de "
-        "supressão recente de vegetação nativa.")
+        "alteração da cobertura vegetal (possível supressão a verificar; "
+        "legalidade não avaliada).")
 
     # ── Score: média ponderada pela área avaliada ─────────────────────────
     aplicaveis = [c for c in cruzamentos if c.get("aplicavel") and c.get("area_avaliada_ha", 0) > 0]
@@ -311,13 +315,13 @@ def _mod_cruzamentos_score(ctx):
     if valor is None:
         classificacao = "Não avaliável (sem camadas aplicáveis)"
     elif valor >= 90:
-        classificacao = "Alta conformidade"
+        classificacao = "Alta conformidade aparente (triagem)"
     elif valor >= 70:
-        classificacao = "Média conformidade"
+        classificacao = "Média conformidade aparente (triagem)"
     elif valor >= 50:
-        classificacao = "Baixa conformidade"
+        classificacao = "Baixa conformidade aparente (triagem)"
     else:
-        classificacao = "Conformidade crítica"
+        classificacao = "Conformidade crítica aparente (triagem)"
 
     score = {
         "valor": valor,
@@ -369,7 +373,8 @@ def _mod_supressao(ctx) -> Dict[str, Any]:
         "suprimida_ha": suprimida,
         "pct_suprimida": round(suprimida / base * 100.0, 2) if base else 0.0,
         "justificativa": f"Vegetação nativa no MapBiomas {ctx['ano_hist']} cruzada com o "
-                         "uso atual (Sentinel-2): pixels hoje antrópicos = supressão.",
+                         "uso atual (Sentinel-2): pixels hoje antrópicos indicam alteração "
+                         "da cobertura vegetal (possível supressão a verificar).",
     }
 
 

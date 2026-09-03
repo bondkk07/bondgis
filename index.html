@@ -193,6 +193,9 @@ select[multiple]{padding:4px}
 .btn.sec:hover:not(:disabled){background:var(--surface-hover);border-color:var(--border-strong);color:var(--text);transform:translateY(-1px);box-shadow:var(--shadow-sm)}
 .btn.mini{width:auto;padding:6px 12px;font-size:11.5px;margin:0;border-radius:var(--radius-sm)}
 .hint{font-size:11.5px;color:var(--text-tertiary);margin-top:7px;line-height:1.55}
+.ressalva{font-size:11px;line-height:1.55;color:var(--text-secondary);background:var(--warning-soft);
+  border:1px solid var(--warning);border-left-width:3px;border-radius:var(--radius-sm);padding:8px 10px;margin:9px 0}
+.ressalva b{color:var(--text)}
 .log{
   background:var(--surface-2);color:#7DD3A8;font-family:"SF Mono",Consolas,monospace;font-size:11px;line-height:1.65;
   border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:10px 12px;margin-top:12px;
@@ -489,6 +492,9 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
       <button class="btn" id="btn-mapbiomas">Analisar</button>
       <p class="hint">Lê os GeoTIFFs (COG) do bucket público do MapBiomas via requisições
         de intervalo — sem baixar o raster completo. Resolução: 30 m (pixel = 0,09 ha).</p>
+      <p class="ressalva">Cada pixel de 30 × 30 m corresponde a 900 m² (0,09 ha). Trata-se da
+        <b>área nominal do pixel</b>, não da precisão cartográfica na determinação da área de feições
+        pequenas.</p>
 
       <progress id="prog-mb" value="0" max="100" style="display:none"></progress>
       <div class="log" id="log-mb"></div>
@@ -552,6 +558,13 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
       <p class="hint">Visualização de camadas espectrais no mapa. Para estatísticas,
         classificação e conformidade use a aba <b>Analisar</b>. Requer o backend
         (⚙ Configurações); o processamento é no servidor, o mapa recebe apenas tiles.</p>
+      <p class="ressalva"><b>Classificação preliminar.</b> Os índices espectrais (NDVI, NDRE, NDWI,
+        NDMI, NBR, BSI) seguem formulações convencionais, mas os limiares utilizados para convertê-los
+        em classes de cobertura são <b>heurísticos e preliminares</b>, ainda não calibrados
+        regionalmente. Em regiões tropicais, culturas agrícolas em pleno desenvolvimento, pastagem
+        vigorosa, vegetação secundária e floresta podem ocupar espaços espectrais próximos, variando
+        conforme a época do ano. A classificação deve ser tratada como triagem e verificada por
+        análise técnica.</p>
 
       <progress id="prog-sat" value="0" max="100" style="display:none"></progress>
       <div class="log" id="log-sat"></div>
@@ -573,8 +586,8 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
         <option value="completa" selected>Análise Ambiental Completa</option>
         <option value="auditoria">Auditoria Ambiental</option>
         <option value="vegetacao">Análise de Vegetação</option>
-        <option value="supressao">Supressão de Vegetação</option>
-        <option value="conformidade">Conformidade Ambiental</option>
+        <option value="supressao">Alteração de Cobertura (indício)</option>
+        <option value="conformidade">Triagem de Conformidade</option>
         <option value="temporal">Comparativo Temporal</option>
         <option value="recuperacao">Recuperação Ambiental</option>
       </select>
@@ -2681,6 +2694,39 @@ function corScore(v){
   return '#d7301f';
 }
 
+// Blocos de ressalva metodológica (apresentação estática). Usam a classe
+// .ressalva — definida tanto no CSS do app quanto no <style> do relatório —
+// para funcionar nos dois contextos com o mesmo HTML.
+const RESSALVAS = {
+  score: `<div class="ressalva"><b>Sobre este índice.</b> O índice de conformidade é uma média ponderada
+    pela área avaliada de cada cruzamento. Por ser ponderado por área, ele pode atenuar a expressão de um
+    problema pequeno em extensão, mas relevante do ponto de vista jurídico — por exemplo, poucos hectares
+    de APP antropizada em um imóvel extenso e regular. <b>Este índice não deve ser utilizado isoladamente
+    para declarar conformidade ambiental.</b> Os componentes de APP, Reserva Legal e alteração de cobertura
+    devem ser avaliados individualmente.</div>`,
+  sentinel: `<div class="ressalva"><b>Classificação preliminar.</b> Os índices espectrais (NDVI, NDRE, NDWI,
+    NDMI, NBR, BSI) seguem formulações convencionais, mas os limiares utilizados para convertê-los em classes
+    de cobertura são <b>heurísticos e preliminares</b>, ainda não calibrados regionalmente. Em regiões
+    tropicais, culturas agrícolas em pleno desenvolvimento, pastagem vigorosa, vegetação secundária e floresta
+    podem ocupar espaços espectrais próximos, variando conforme a época do ano. A classificação deve ser
+    tratada como triagem e verificada por análise técnica.</div>`,
+  app: `<div class="ressalva"><b>Triagem de APP.</b> São considerados antrópicos: solo exposto, agricultura,
+    pastagem e infraestrutura; água e vegetação são considerados conformes. Situações como solo exposto
+    natural, banco de areia, área sazonalmente inundável ou APP em processo de recuperação podem gerar alerta
+    falso-positivo, dependendo da data da imagem analisada.</div>`,
+  supressao: `<div class="ressalva"><b>Sobre a detecção de alteração.</b> A comparação entre a vegetação
+    nativa mapeada pelo MapBiomas (referência histórica) e a condição atual observada no Sentinel-2 identifica
+    <b>indício de alteração da cobertura vegetal</b>. A caracterização de desmatamento — e de sua legalidade —
+    depende de data da ocorrência, análise documental, dados complementares (como PRODES) e eventuais
+    autorizações ou licenças, não avaliados automaticamente por esta plataforma.</div>`,
+  rodape: `<div class="ressalva"><b>Natureza deste resultado.</b> O BondGIS é uma ferramenta de
+    <b>triagem e diagnóstico preliminar</b>, destinada a identificar conflitos, gerar alertas e direcionar a
+    análise técnica. Os resultados apresentados <b>não constituem laudo de conformidade ambiental</b> nem
+    conclusão jurídica sobre regularidade ou irregularidade. A confirmação da natureza e da legalidade de
+    qualquer situação apontada pode exigir análise histórica, documental, ambiental e, eventualmente,
+    verificação de campo.</div>`,
+};
+
 function renderAnalise(r){
   const m = r.modulos || {};
   let html = `<p class="hint" style="margin-top:12px">
@@ -2695,10 +2741,11 @@ function renderAnalise(r){
     html += `
     <div style="display:flex;align-items:center;gap:10px;margin-top:6px">
       <span class="grau-badge" style="background:${cor}">${esc(s.classificacao)}</span>
-      <span class="hint" style="margin:0">Score de conformidade:
+      <span class="hint" style="margin:0">Índice de conformidade ponderado por área (triagem):
         <b style="color:${cor};font-size:15px">${s.valor == null ? '—' : s.valor.toFixed(1)}</b>/100</span>
     </div>
     <p class="hint">${esc(s.formula)}</p>`;
+    html += RESSALVAS.score;
   }
 
   // ── Cruzamentos com justificativa ──
@@ -2714,13 +2761,14 @@ function renderAnalise(r){
       html += `<div class="aud-div-item" style="flex-wrap:wrap">
         <span class="sev" style="background:${cor}"></span>
         <span class="nome"><b>${esc(c.titulo)}</b></span>
-        <span class="val">${c.pct_conformidade.toFixed(1)}% conforme</span>
+        <span class="val">${c.pct_conformidade.toFixed(1)}% conforme (aparente)</span>
         <div style="flex-basis:100%;font-size:11.5px;color:var(--text-secondary);padding-left:17px">
           Avaliada: ${c.area_avaliada_ha.toFixed(1)} ha · Conforme: ${c.area_conforme_ha.toFixed(1)} ha ·
           Divergente: <b>${c.area_divergente_ha.toFixed(1)} ha</b><br>${esc(c.justificativa)}
           ${c.validacao_mapbiomas_pct != null ? `<br>Validação MapBiomas: ${c.validacao_mapbiomas_pct}% · RL = ${c.percentual_rl_sobre_imovel}% do imóvel` : ''}
         </div></div>`;
     }
+    html += RESSALVAS.app;
   }
 
   // ── Composição de uso ──
@@ -2735,16 +2783,18 @@ function renderAnalise(r){
         <td style="text-align:right">${c.area_ha.toFixed(2)}</td>
         <td style="text-align:right">${c.pct.toFixed(1)}%</td></tr>`).join('') +
       `</tbody></table>`;
+    html += RESSALVAS.sentinel;
   }
 
   // ── Supressão / Recuperação ──
   if(m.supressao){
     const su = m.supressao;
-    html += `<h3>Supressão de vegetação</h3>
+    html += `<h3>Indício de alteração da cobertura vegetal</h3>
       <div class="score-grid">
         <div class="score-card"><div class="l">Nativa em ${su.ano_referencia}</div><div class="v">${su.nativa_historica_ha.toFixed(1)} ha</div></div>
-        <div class="score-card"><div class="l">Suprimida desde então</div><div class="v" style="color:${su.pct_suprimida>5?'#d7301f':'#1a9850'}">${su.suprimida_ha.toFixed(1)} ha (${su.pct_suprimida}%)</div></div>
+        <div class="score-card"><div class="l">Com indício de alteração</div><div class="v" style="color:${su.pct_suprimida>5?'#d7301f':'#1a9850'}">${su.suprimida_ha.toFixed(1)} ha (${su.pct_suprimida}%)</div></div>
       </div><p class="hint">${esc(su.justificativa)}</p>`;
+    html += RESSALVAS.supressao;
   }
   if(m.recuperacao){
     const re = m.recuperacao;
@@ -2768,6 +2818,7 @@ function renderAnalise(r){
       `</tbody></table>`;
   }
 
+  html += RESSALVAS.rodape;
   html += `<div class="aud-export">
     <button class="btn sec" onclick="relAnalise()">Relatório HTML / PDF</button>
     <button class="btn sec" onclick="baixarAnaliseJson()">JSON</button>
@@ -2800,8 +2851,8 @@ function relAnalise(){
   if(!r){ toast('Execute a análise primeiro.', 'warn'); return; }
   const m = r.modulos || {};
   const tipoRotulo = {completa:'Análise Ambiental Completa', auditoria:'Auditoria Ambiental',
-    vegetacao:'Análise de Vegetação', supressao:'Supressão de Vegetação',
-    conformidade:'Conformidade Ambiental', temporal:'Comparativo Temporal',
+    vegetacao:'Análise de Vegetação', supressao:'Alteração de Cobertura (indício)',
+    conformidade:'Triagem de Conformidade', temporal:'Comparativo Temporal',
     recuperacao:'Recuperação Ambiental'}[r.tipo] || r.tipo;
   const corTag = m.score ? corScoreHex(m.score.valor) : '#1a7f4b';
 
@@ -2809,8 +2860,8 @@ function relAnalise(){
   if(m.score){
     const s = m.score;
     corpo += `<p style="margin-bottom:10px"><span class="grau">${esc(s.classificacao)}</span>
-      &nbsp; Score de conformidade: <b style="font-size:1.3em">${s.valor == null ? '—' : s.valor.toFixed(1)}</b>/100</p>
-      <p style="font-size:.82em;color:#555">${esc(s.formula)}</p>`;
+      &nbsp; Índice de conformidade ponderado por área (triagem): <b style="font-size:1.3em">${s.valor == null ? '—' : s.valor.toFixed(1)}</b>/100</p>
+      <p style="font-size:.82em;color:#555">${esc(s.formula)}</p>` + RESSALVAS.score;
   }
   if(m.cruzamentos){
     const rows = m.cruzamentos.map(c => c.aplicavel ? `<tr>
@@ -2823,7 +2874,7 @@ function relAnalise(){
     corpo += `<h2>Cruzamentos espaciais (CAR × Sentinel-2 × MapBiomas)</h2>
       <table><thead><tr><th>Cruzamento</th><th style="text-align:right">Avaliada (ha)</th>
       <th style="text-align:right">Divergente (ha)</th><th style="text-align:right">Conformidade</th>
-      <th>Justificativa técnica</th></tr></thead><tbody>${rows}</tbody></table>`;
+      <th>Justificativa técnica</th></tr></thead><tbody>${rows}</tbody></table>` + RESSALVAS.app;
   }
   if(m.composicao){
     const comp = (m.composicao.por_camada.imovel||[]).slice().sort((a,b)=>b.area_ha-a.area_ha);
@@ -2832,13 +2883,13 @@ function relAnalise(){
       <th style="text-align:right">%</th></tr></thead><tbody>` +
       comp.map(c => `<tr><td><span style="background:${c.cor};display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:6px;vertical-align:middle"></span>${esc(c.classe)}</td>
         <td style="text-align:right">${c.area_ha.toFixed(2)}</td><td style="text-align:right">${c.pct.toFixed(1)}%</td></tr>`).join('') +
-      `</tbody></table>`;
+      `</tbody></table>` + RESSALVAS.sentinel;
   }
   if(m.supressao){
-    corpo += `<h2>Supressão de vegetação</h2><p>Vegetação nativa em ${m.supressao.ano_referencia}:
-      <b>${m.supressao.nativa_historica_ha.toFixed(2)} ha</b> · Suprimida:
+    corpo += `<h2>Indício de alteração da cobertura vegetal</h2><p>Vegetação nativa em ${m.supressao.ano_referencia}:
+      <b>${m.supressao.nativa_historica_ha.toFixed(2)} ha</b> · Com indício de alteração:
       <b>${m.supressao.suprimida_ha.toFixed(2)} ha (${m.supressao.pct_suprimida}%)</b>.<br>
-      <span style="font-size:.85em;color:#555">${esc(m.supressao.justificativa)}</span></p>`;
+      <span style="font-size:.85em;color:#555">${esc(m.supressao.justificativa)}</span></p>` + RESSALVAS.supressao;
   }
   if(m.recuperacao){
     corpo += `<h2>Recuperação ambiental</h2><p>Área antrópica em ${m.recuperacao.ano_referencia}:
@@ -2870,6 +2921,9 @@ function relAnalise(){
   th{background:#1a7f4b;color:#fff;padding:9px 13px;text-align:left;font-size:.83em}
   td{border-bottom:1px solid #eee;padding:8px 13px;font-size:.85em;vertical-align:top}
   h2{color:#1a7f4b;margin:26px 0 8px}
+  .ressalva{font-size:.82em;line-height:1.5;color:#555;background:#fff8e1;border:1px solid #f0c000;
+    border-left-width:3px;border-radius:6px;padding:10px 12px;margin:12px 0}
+  .ressalva b{color:#1a2530}
   .footer{text-align:center;margin-top:30px;font-size:.78em;color:#999}
 </style></head><body>
 <div class="header"><div class="tag">${esc(tipoRotulo)}</div>
@@ -2879,8 +2933,8 @@ function relAnalise(){
     (hist. ${r.mapbiomas_ano_historico})</div></div>
 <div class="content">
   ${corpo}
-  <p class="footer">Gerado por BondGis · Análise preliminar por sensoriamento remoto
-    (não substitui laudo oficial) · ${esc(agora())}</p>
+  ${RESSALVAS.rodape}
+  <p class="footer">Gerado por BondGis · Triagem e diagnóstico preliminar por sensoriamento remoto · ${esc(agora())}</p>
 </div></body></html>`);
 }
 function corScoreHex(v){
