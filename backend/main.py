@@ -39,44 +39,17 @@ class _LegacyTLSAdapter(HTTPAdapter):
         return super().init_poolmanager(*args, **kwargs)
 
 
-class _CompatTLSAdapter(HTTPAdapter):
-    """Aceita cifras/protocolos legados (SECLEVEL=1) **mantendo** a verificação
-    do certificado e do hostname.
-
-    Vários servidores gov-br encerram o handshake que o OpenSSL 3.x propõe por
-    padrão (SSLEOFError/handshake failure), mas o problema é a negociação de
-    cifra, não a cadeia do certificado. Este meio-termo resolve a compatibilidade
-    sem abrir mão da integridade — o que importa quando o dado alimenta um
-    cálculo financeiro (ver _fetch_aneel)."""
-    def init_poolmanager(self, *args, **kwargs):
-        ctx = create_urllib3_context()
-        ctx.check_hostname = True
-        ctx.verify_mode = ssl.CERT_REQUIRED
-        try:
-            ctx.set_ciphers("DEFAULT@SECLEVEL=1")
-        except ssl.SSLError:
-            pass
-        kwargs["ssl_context"] = ctx
-        return super().init_poolmanager(*args, **kwargs)
-
-
 # Sessão de fallback para hosts com TLS legado (dados públicos da allowlist).
 _legacy_session = requests.Session()
 _legacy_session.mount("https://", _LegacyTLSAdapter())
 
-# Fallback intermediário: cifras legadas, certificado ainda verificado.
-_compat_session = requests.Session()
-_compat_session.mount("https://", _CompatTLSAdapter())
-
 import analise
 import sentinel
-import tarifas
 from config import get_settings
 from earth_engine import init_earth_engine, is_initialized
 from schemas import (
     AnaliseRequest, AnaliseResponse,
     DatesRequest, DatesResponse, HealthResponse,
-    TarifaEnergiaResponse,
     TilesRequest, TilesResponse, TimeSeriesRequest, TimeSeriesResponse,
 )
 
@@ -156,33 +129,6 @@ def _fetch_allowlisted(url: str, timeout: int = 60,
         raise HTTPException(status_code=502, detail=f"Falha ao acessar a fonte: {exc}")
 
 
-def _fetch_aneel(url: str, timeout: int = 20) -> requests.Response:
-    """GET na API de dados abertos da ANEEL, com verificação de TLS obrigatória.
-
-    Deliberadamente NÃO usa _fetch_allowlisted: aquele caminho tem fallback para
-    a sessão de TLS legado com verify=False, aceitável para GeoServers gov-br que
-    servem geometria, mas não para um número que vai alimentar cálculo financeiro.
-    Também mantém a ANEEL fora da allowlist do /api/proxy, para não abrir o proxy
-    genérico para esse host."""
-    host = (urlparse(url).hostname or "").lower()
-    if host != tarifas.ANEEL_HOST:
-        raise HTTPException(status_code=400, detail=f"URL fora do domínio da ANEEL: {host}")
-    headers = {"User-Agent": "BondGis/1.0"}
-    try:
-        return requests.get(url, timeout=timeout, headers=headers)
-    except requests.exceptions.SSLError:
-        # O host da ANEEL derruba o handshake padrão do OpenSSL 3.x. Repete com
-        # cifras legadas, mas SEM desativar a verificação do certificado — se
-        # nem assim funcionar, é melhor falhar do que aceitar dado não verificado.
-        logger.warning("TLS padrão falhou na ANEEL; repetindo com cifras legadas (certificado ainda verificado).")
-        try:
-            return _compat_session.get(url, timeout=timeout, headers=headers)
-        except requests.RequestException as exc:
-            raise HTTPException(status_code=502, detail=f"Falha ao acessar a ANEEL: {exc}")
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"Falha ao acessar a ANEEL: {exc}")
-
-
 @app.get("/api/proxy")
 def proxy(url: str = Query(..., description="URL pública (host na allowlist) a repassar")):
     """Proxy CORS para GeoServers públicos que não enviam cabeçalhos CORS.
@@ -225,37 +171,6 @@ def health() -> HealthResponse:
         project=settings.ee_project or None,
         message=None if ok else "Earth Engine não inicializado — verifique as variáveis de ambiente.",
     )
-
-
-@app.get("/api/tarifa-energia", response_model=TarifaEnergiaResponse)
-def tarifa_energia(
-    distribuidora: str = Query("ERO", description="Código SigAgente da distribuidora na ANEEL (ex.: ERO = Energisa Rondônia)"),
-    subgrupo: str = Query("B1", description="Subgrupo tarifário (ex.: B1 = baixa tensão)"),
-    classe: str = Query("Residencial", description="Classe de consumo"),
-    modalidade: str = Query("Convencional", description="Modalidade tarifária"),
-) -> TarifaEnergiaResponse:
-    """Consulta a tarifa de energia homologada pela ANEEL (Dados Abertos) para
-    a distribuidora/classe informadas e sugere um valor de kWh com impostos
-    (estimativa — ver docstring de tarifas.py). Cacheado em memória por 12h."""
-    chave = f"{distribuidora}|{subgrupo}|{classe}|{modalidade}"
-    cache_hit = tarifas.buscar_no_cache(chave)
-    if cache_hit:
-        return TarifaEnergiaResponse(**cache_hit)
-
-    url = tarifas.montar_url_aneel(distribuidora, subgrupo, classe, modalidade)
-    r = _fetch_aneel(url, timeout=20)
-    if r.status_code != 200:
-        raise HTTPException(status_code=502, detail=f"ANEEL respondeu HTTP {r.status_code}")
-    try:
-        dado = tarifas.processar_resposta(r.json(), distribuidora, subgrupo, classe, modalidade)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("Erro em /api/tarifa-energia")
-        raise HTTPException(status_code=502, detail=f"Falha ao interpretar resposta da ANEEL: {exc}")
-
-    tarifas.salvar_no_cache(chave, dado)
-    return TarifaEnergiaResponse(**dado)
 
 
 @app.post("/api/tiles", response_model=TilesResponse)
