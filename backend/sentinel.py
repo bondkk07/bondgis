@@ -1,4 +1,4 @@
-﻿"""Processamento Sentinel-2 no Google Earth Engine.
+"""Processamento Sentinel-2 no Google Earth Engine.
 
 Implementa: mÃ¡scara de nuvens, composiÃ§Ãµes (recente/mediana), bandas
 B2â€“B12, Ã­ndices espectrais (NDVI, NDRE, NDWI, NDMI, BSI, NBR), classificaÃ§Ã£o
@@ -40,6 +40,20 @@ CLASSES: Dict[int, Tuple[str, str]] = {
     9: ("Infraestrutura", "#969696"),
 }
 CLASS_PALETTE = [CLASSES[i][1] for i in sorted(CLASSES)]
+
+# Critério espectral de cada classe (exibido na legenda — transparência total
+# de por que um pixel cai em cada classe). Vírgula decimal para leitura.
+CLASS_CRITERIOS: Dict[int, str] = {
+    1: "NDWI > 0,20",
+    2: "NDWI > 0 · NDMI > 0,30 · NDVI < 0,60",
+    3: "BSI > 0,10 · NDVI < 0,25",
+    4: "NDVI > 0,40 · NDRE > 0,28  (clorofila alta = cultura)",
+    5: "NDVI > 0,20 e não classificado como cultura  (gramínea/pasto, NDRE menor)",
+    6: "NDVI 0,55–0,70 · NDMI > 0,15",
+    7: "NDVI > 0,70 · NDMI > 0,25",
+    8: "NBR < 0,05 · NDVI < 0,35",
+    9: "NDVI < 0,20 · NDMI < 0 · BSI > 0",
+}
 
 
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -129,37 +143,44 @@ def add_indices(img: ee.Image) -> ee.Image:
 #  ClassificaÃ§Ã£o automÃ¡tica baseada em regras (preliminar)
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 def classify(img: ee.Image) -> ee.Image:
-    """ClassificaÃ§Ã£o por limiares de Ã­ndices. Retorna banda inteira 'class'
-    (1â€“9). Ordem das regras importa: da mais especÃ­fica para a mais genÃ©rica.
-    Limiares sÃ£o heurÃ­sticos e servem como diagnÃ³stico preliminar."""
+    """Classificação por limiares de índices espectrais (banda inteira 'class',
+    1–9). A ordem das regras vai da mais específica para a mais genérica; os
+    critérios de cada classe estão em CLASS_CRITERIOS (expostos na legenda).
+
+    Continua sendo triagem preliminar (cena única, limiares não calibrados
+    regionalmente). Melhoria principal desta revisão: usar o NDRE (clorofila
+    no red-edge) para separar Agricultura — dossel vigoroso com clorofila alta —
+    de Pastagem — gramínea, com menor densidade de clorofila —, que antes se
+    confundiam por usarem só NDVI/BSI."""
     ndvi = img.select("NDVI")
+    ndre = img.select("NDRE")
     ndwi = img.select("NDWI")
     ndmi = img.select("NDMI")
     nbr = img.select("NBR")
     bsi = img.select("BSI")
 
-    # ComeÃ§a como 0 (nÃ£o classificado) e vai preenchendo por where().
+    # Começa como 0 (não classificado) e preenche por where(), na ordem.
     c = ee.Image(0).rename("class").toInt()
 
-    # 1 Ãgua â€” NDWI alto
-    c = c.where(ndwi.gt(0.2), 1)
-    # 2 Ãrea Ãšmida â€” Ã¡gua/umidade superficial sem vegetaÃ§Ã£o densa
-    c = c.where(c.eq(0).And(ndwi.gt(0.0)).And(ndmi.gt(0.3)).And(ndvi.lt(0.6)), 2)
-    # 8 Ãrea Queimada â€” NBR muito baixo em Ã¡rea nÃ£o-Ã¡gua
+    # 1 Água — lâmina d'água aberta (NDWI alto)
+    c = c.where(ndwi.gt(0.20), 1)
+    # 2 Área Úmida — umidade/alagado sem vegetação densa
+    c = c.where(c.eq(0).And(ndwi.gt(0.0)).And(ndmi.gt(0.30)).And(ndvi.lt(0.60)), 2)
+    # 8 Área Queimada — assinatura de queima (NBR muito baixo), fora de água
     c = c.where(c.eq(0).And(nbr.lt(0.05)).And(ndvi.lt(0.35)), 8)
-    # 9 Infraestrutura â€” NDVI muito baixo, seco, nÃ£o Ã© solo agrÃ­cola Ãºmido
-    c = c.where(c.eq(0).And(ndvi.lt(0.2)).And(ndmi.lt(0.0)).And(bsi.gt(0.0)), 9)
-    # 3 Solo Exposto â€” BSI alto e NDVI baixo
-    c = c.where(c.eq(0).And(bsi.gt(0.1)).And(ndvi.lt(0.25)), 3)
-    # 7 Floresta â€” NDVI muito alto e boa umidade da vegetaÃ§Ã£o (NDMI alto)
-    c = c.where(c.eq(0).And(ndvi.gt(0.7)).And(ndmi.gt(0.25)), 7)
-    # 6 VegetaÃ§Ã£o SecundÃ¡ria â€” NDVI alto, umidade moderada
+    # 9 Infraestrutura — superfície seca/impermeável, sem vegetação
+    c = c.where(c.eq(0).And(ndvi.lt(0.20)).And(ndmi.lt(0.0)).And(bsi.gt(0.0)), 9)
+    # 3 Solo Exposto — solo nu (BSI alto, NDVI baixo)
+    c = c.where(c.eq(0).And(bsi.gt(0.10)).And(ndvi.lt(0.25)), 3)
+    # 7 Floresta — dossel denso e úmido (NDVI muito alto, NDMI alto)
+    c = c.where(c.eq(0).And(ndvi.gt(0.70)).And(ndmi.gt(0.25)), 7)
+    # 6 Vegetação Secundária — porte intermediário, boa umidade
     c = c.where(c.eq(0).And(ndvi.gt(0.55)).And(ndmi.gt(0.15)), 6)
-    # 4 Agricultura â€” NDVI alto/moderado com solo evidente (BSI nÃ£o desprezÃ­vel)
-    c = c.where(c.eq(0).And(ndvi.gt(0.4)).And(bsi.gt(-0.1)), 4)
-    # 5 Pastagem â€” NDVI moderado (inclui rasteira remanescente)
-    c = c.where(c.eq(0).And(ndvi.gt(0.15)), 5)
-    # resto continua 0 (sem dado / nÃ£o classificado) e Ã© mascarado
+    # 4 Agricultura — dossel vigoroso com ALTA clorofila (NDRE) → distingue de pasto
+    c = c.where(c.eq(0).And(ndvi.gt(0.40)).And(ndre.gt(0.28)), 4)
+    # 5 Pastagem — demais áreas vegetadas (gramínea; NDRE menor que cultura)
+    c = c.where(c.eq(0).And(ndvi.gt(0.20)), 5)
+    # resto continua 0 (sem dado / não classificado) e é mascarado
     return c.updateMask(c.gt(0))
 
 
@@ -186,10 +207,32 @@ def _vis_for(layer: str) -> Dict[str, Any]:
     raise ValueError(f"Camada desconhecida: {layer}")
 
 
-def _legend_for(layer: str) -> List[Dict[str, str]]:
+def _legend_for(layer: str) -> List[Dict[str, Any]]:
+    """Legenda da camada de classificação: cor + rótulo + critério espectral."""
     if layer == "classificacao":
-        return [{"label": CLASSES[i][0], "color": CLASSES[i][1]} for i in sorted(CLASSES)]
+        return [{"label": CLASSES[i][0], "color": CLASSES[i][1],
+                 "criterio": CLASS_CRITERIOS.get(i)} for i in sorted(CLASSES)]
     return []
+
+
+# Barra de cor contínua + interpretação (min→max) das camadas de índice.
+_ESCALAS = {
+    "ndvi": ("Vigor da vegetação (NDVI)",        "Solo / água",       "Vegetação densa"),
+    "ndre": ("Clorofila – red-edge (NDRE)",      "Baixa clorofila",   "Alta clorofila"),
+    "ndwi": ("Água / umidade superficial (NDWI)", "Seco",             "Água / úmido"),
+    "ndmi": ("Umidade da vegetação (NDMI)",      "Vegetação seca",    "Vegetação úmida"),
+    "bsi":  ("Solo exposto (BSI)",               "Vegetado / água",   "Solo exposto"),
+    "nbr":  ("Queimadas (NBR)",                  "Queimado / baixo",  "Vegetação intacta"),
+}
+
+
+def _escala_for(layer: str, vis: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    if layer not in _ESCALAS:
+        return None
+    titulo, min_label, max_label = _ESCALAS[layer]
+    return {"titulo": titulo, "palette": vis.get("palette", []),
+            "min": vis.get("min"), "max": vis.get("max"),
+            "min_label": min_label, "max_label": max_label}
 
 
 def make_tiles(aoi_geojson: Dict[str, Any], layer: str, date_start: str,
@@ -216,6 +259,7 @@ def make_tiles(aoi_geojson: Dict[str, Any], layer: str, date_start: str,
         "n_images": n,
         "vis": vis,
         "legend": _legend_for(layer),
+        "escala": _escala_for(layer, vis),
     }
 
 

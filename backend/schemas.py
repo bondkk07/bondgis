@@ -38,6 +38,7 @@ class TilesRequest(BaseAOIRequest):
 class LegendEntry(BaseModel):
     label: str
     color: str
+    criterio: Optional[str] = None   # regra espectral que define a classe
 
 
 class TilesResponse(BaseModel):
@@ -48,6 +49,8 @@ class TilesResponse(BaseModel):
     n_images: int = 0
     vis: Dict[str, Any] = {}
     legend: List[LegendEntry] = []
+    # Para camadas de índice (NDVI, NDRE…): barra de cor contínua e o que ela mede.
+    escala: Optional[Dict[str, Any]] = None
 
 
 class DatesRequest(BaseAOIRequest):
