@@ -166,7 +166,7 @@ reinformar se quiser alterá-las.)
 | GET | `/api/proxy?url=` | Proxy CORS (allowlist) p/ GeoServers gov-br (SICAR etc.) |
 | GET | `/api/ping?url=` | Teste de disponibilidade server-side (painel de status) |
 | POST | `/api/tiles` | Tiles Sentinel-2 (RGB/índices/classificação) |
-| POST | `/api/analise` | Fluxo único de análise (auditoria, conformidade, temporal…) |
+| POST | `/api/analise` | Fluxo único de análise (completa, auditoria, conformidade, vegetacao) |
 | POST | `/api/dates` `/api/timeseries` | Datas disponíveis / série temporal |
 
 Segurança: `/api/proxy` e `/api/ping` só aceitam hosts da allowlist (evita proxy

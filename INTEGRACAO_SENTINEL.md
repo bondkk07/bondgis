@@ -12,7 +12,7 @@ executa Python). O Earth Engine exige autenticação por *service account*, que
 
 ```
 Frontend estático (index.html)  ──►  Backend FastAPI (pasta backend/)  ──►  Earth Engine
-   aba "Satélite"                     /api/tiles, /api/stats, ...            Sentinel-2
+   abas "Satélite"/"Analisar"         /api/tiles, /api/analise, ...          Sentinel-2
 ```
 
 O frontend envia a **geometria da propriedade (GeoJSON)** + filtros e recebe
@@ -39,8 +39,9 @@ Todas as mudanças são aditivas e não quebram funcionalidades anteriores:
 
 | Arquivo | Papel |
 |---------|-------|
-| `main.py` | API FastAPI: `/api/health`, `/api/tiles`, `/api/stats`, `/api/dates`, `/api/timeseries`. |
+| `main.py` | API FastAPI: `/api/health`, `/api/tiles`, `/api/dates`, `/api/timeseries`, `/api/analise`, `/api/proxy`, `/api/ping`. |
 | `sentinel.py` | Processamento Sentinel-2: máscara de nuvens, composições, índices (NDVI, NDRE, NDWI, NDMI, BSI, NBR), classificação em 9 classes, estatísticas por classe. |
+| `analise.py` | Pipeline único da aba **Analisar** (`/api/analise`): composição de uso por camada do CAR + cruzamentos espaciais CAR × Sentinel-2 + score de conformidade. |
 | `earth_engine.py` | Inicialização segura do EE via service account. |
 | `config.py` | Configuração via `.env` (pydantic-settings). |
 | `schemas.py` | Modelos de request/response (Pydantic). |
@@ -80,9 +81,9 @@ Todas as mudanças são aditivas e não quebram funcionalidades anteriores:
 - **NDMI** = (B8−B11)/(B8+B11)
 - **BSI** (solo exposto) = ((B11+B4)−(B8+B2))/((B11+B4)+(B8+B2))
 - **Queimadas** via **NBR** = (B8−B12)/(B8+B12)
-- **Classificação automática** (regras por índices): Água, Solo exposto,
-  Vegetação rasteira, Pastagem, Agricultura, Vegetação arbustiva, Floresta,
-  Área queimada, Área construída.
+- **Classificação automática** (regras por índices): Água, Área Úmida,
+  Solo Exposto, Agricultura, Pastagem, Vegetação Secundária, Floresta,
+  Área Queimada, Infraestrutura.
 
 ## Estatísticas exibidas
 
@@ -92,39 +93,40 @@ imprimível é gerado com um clique.
 
 ---
 
-# Módulo AUDITORIA_CAR
+# Aba ANALISAR (pipeline unificado)
 
 Cruza automaticamente as camadas do CAR com a cobertura observada pelo
-Sentinel-2, **validada pelo MapBiomas** (asset da Coleção 10 lido no próprio
-Earth Engine), e produz um diagnóstico de conformidade.
+Sentinel-2 e produz um diagnóstico de conformidade. É um retrato do
+**presente** (não usa MapBiomas — a leitura histórica fica na aba MapBiomas
+própria).
 
 ### Arquivos
-- **Backend**: `backend/auditoria.py` + endpoint `POST /api/auditoria` em
+- **Backend**: `backend/analise.py` + endpoint `POST /api/analise` em
   `main.py` (modelos em `schemas.py`).
-- **Frontend**: aba **Auditoria** (trilho de ícones) em `index.html`, com o
-  painel executivo, a camada Leaflet de divergências e os exports.
+- **Frontend**: aba **Analisar** (trilho de ícones) em `index.html`, com o
+  painel de resultado, a camada Leaflet de divergências e os exports.
 
 ### Fluxo
 1. A aba detecta automaticamente as sub-camadas do CAR já carregadas
    (Limite do imóvel, APP, Reserva Legal, Uso Consolidado, Vegetação Nativa)
    pelo grupo/nome.
-2. Envia o limite do imóvel + as sub-camadas ao backend.
+2. Envia o limite do imóvel + as sub-camadas ao backend, com o `tipo` de
+   análise (completa, auditoria, conformidade, vegetacao).
 3. O backend classifica o Sentinel-2 (9 classes: Água, Área Úmida, Solo
    Exposto, Agricultura, Pastagem, Vegetação Secundária, Floresta, Área
-   Queimada, Infraestrutura), valida contra o MapBiomas e detecta 9 tipos de
-   divergência: APP antropizada, APP sem vegetação, RL com déficit, RL
-   excedente, mudança de uso, supressão vegetal, expansão agrícola, corpos
-   hídricos não declarados e áreas degradadas.
+   Queimada, Infraestrutura) e executa os cruzamentos espaciais C1–C4:
+   uso produtivo × Área Consolidada, Reserva Legal × vegetação, APP ×
+   ocupação e Vegetação Nativa declarada × cobertura atual.
 
 ### Saídas
-- **Painel executivo**: Score Ambiental, Score CAR, Score Vegetação, Score
-  APP, Score Reserva Legal e Índice Geral de Conformidade, com o grau
-  (Conforme / Atenção / Divergência moderada / Divergência crítica).
-- **Camada Leaflet** das divergências, colorida por severidade
-  (verde = conforme, amarelo = atenção, laranja = moderada, vermelho = crítica).
+- **Score de conformidade** ponderado por área (média dos cruzamentos
+  aplicáveis), com a classificação por faixa (alta / média / baixa / crítica —
+  todas rotuladas como *triagem*).
+- **Composição de uso** por camada do CAR (área e % de cada classe).
+- **Camada Leaflet** das divergências, colorida por cruzamento.
 - **Relatório HTML** (com botão Imprimir/Salvar **PDF**), **JSON** estruturado
   e **GeoJSON** das divergências, todos exportáveis com um clique.
 
-> As heurísticas de classificação e de divergência são **preliminares**
+> As heurísticas de classificação e de cruzamento são **preliminares**
 > (cena única, limiares de índices) — servem como triagem, não como laudo
-> oficial. Ajuste os limiares em `auditoria.py` para a sua região.
+> oficial. Ajuste os limiares em `sentinel.py → classify` para a sua região.
