@@ -148,7 +148,11 @@ def proxy(url: str = Query(..., description="URL pública (host na allowlist) a 
     o geotiff.js lê só a janela do COG, sem baixar o raster inteiro (~800 MB)."""
     extra = {"Range": range_header} if range_header else None
     r = _fetch_allowlisted(url, headers_extra=extra)
-    passthru = {h: r.headers[h] for h in ("Content-Range", "Accept-Ranges", "Content-Length")
+    # NÃO repassar Content-Length: o requests pode descomprimir o corpo (gzip),
+    # deixando o Content-Length do upstream inconsistente com r.content e
+    # truncando a resposta. O Starlette calcula o Content-Length correto a
+    # partir do conteúdo. Content-Range/Accept-Ranges seguem para o geotiff.js.
+    passthru = {h: r.headers[h] for h in ("Content-Range", "Accept-Ranges")
                 if h in r.headers}
     return Response(
         content=r.content,

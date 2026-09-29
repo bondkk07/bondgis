@@ -1208,6 +1208,12 @@ function extrairUF(codigoCar){
   const m = /^([A-Z]{2})-\d{7}-/.exec(codigoCar);
   return m ? m[1].toLowerCase() : null;
 }
+// Normaliza o código CAR digitado: aceita com pontos e/ou espaços
+// (ex.: RO-1100304-0309.2311.5A1E...) e devolve o formato canônico do SICAR
+// (UF-CODMUN-HASH, com o hash sem separadores) usado no filtro cod_imovel.
+function normalizarCar(s){
+  return String(s ?? '').trim().toUpperCase().replace(/[.\s]/g, '');
+}
 function wfsCarUrl(base, typeName, version, codigoCar){
   const carSafe = codigoCar.replaceAll("'", "''");
   const typeParam = version.startsWith('2.') ? 'typenames' : 'typeName';
@@ -1220,7 +1226,7 @@ function wfsCarUrl(base, typeName, version, codigoCar){
   return `${base}?${p}`;
 }
 async function buscarSicar(){
-  const codigo = $('inp-car-1').value.trim().toUpperCase();
+  const codigo = normalizarCar($('inp-car-1').value);
   const uf = extrairUF(codigo);
   if(!uf){ logTo('log-car', `✖ Código CAR inválido: "${codigo}"`, true); return; }
 
@@ -1836,7 +1842,7 @@ async function verificarSobreposicao(){
   }
   logTo('log-sobrep', 'Consultando Listas MCR/PRODES MMA...');
   prog.value = 88;
-  resultados.push(await consultarProdesMMA(state.codigoCar || $('inp-car-1').value.trim().toUpperCase()));
+  resultados.push(await consultarProdesMMA(state.codigoCar || normalizarCar($('inp-car-1').value)));
   prog.value = 100;
   logTo('log-sobrep', '✔ Verificação concluída.');
 
@@ -2042,7 +2048,7 @@ function relSobreposicao(){
   const {rows, comSobrep, comErro, semSobrep} = renderLinhasSobreposicao(resultados);
   const mbSection = renderSecaoMapBiomasHtml(state.resultadoMapBiomas);
 
-  const codigoCar = state.codigoCar || $('inp-car-1').value.trim().toUpperCase();
+  const codigoCar = state.codigoCar || normalizarCar($('inp-car-1').value);
   const carDisplay = codigoCar ? esc(codigoCar) : '<em>Não identificado</em>';
   const areaDisplay = st.areaHa ? `${st.areaHa.toFixed(4)} ha` : '—';
   const dataHora = agora();
@@ -2110,7 +2116,7 @@ function relSobreposicao(){
    tudo em um único relatório. */
 async function analisarAutomaticamente(){
   const codigos = [1,2,3,4,5]
-    .map(i => $(`inp-car-${i}`).value.trim().toUpperCase())
+    .map(i => normalizarCar($(`inp-car-${i}`).value))
     .filter(Boolean);
   if(!codigos.length){ toast('Informe ao menos um código CAR.', 'warn'); return; }
 
