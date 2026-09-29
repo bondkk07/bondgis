@@ -260,6 +260,8 @@ select[multiple]{padding:4px}
   background:var(--rot,#555);border:1px solid rgba(255,255,255,.65);
   box-shadow:0 1px 4px rgba(0,0,0,.35);text-shadow:0 1px 2px rgba(0,0,0,.45);
 }
+.rotulo-mapa.rot-alerta{border-color:#fff;font-weight:700;
+  box-shadow:0 0 0 2px rgba(215,48,31,.4),0 1px 4px rgba(0,0,0,.45)}
 
 /* ── Catálogo externo ──────────────────────────────────── */
 .cat-grupo{font-size:10.5px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.07em;margin:16px 0 6px}
@@ -1032,6 +1034,8 @@ const baseSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/service
 const layersControl = L.control.layers(
   {'OpenStreetMap':baseOSM,'Satélite (Esri)':baseSat}, {}, {position:'topright'}).addTo(map);
 L.control.scale({imperial:false}).addTo(map);
+// Ao mover/dar zoom, reavalia os rótulos para nenhum se sobrepor.
+map.on('zoomend moveend', () => agendarDeclutter());
 
 /* ── Utilidades ───────────────────────────────────────────────────── */
 const $ = id => document.getElementById(id);
@@ -1184,9 +1188,79 @@ const GRUPO_LABEL = {
 // Atributos preferidos para o rótulo POR FEIÇÃO (usa o primeiro que existir).
 const ATRIBUTOS_ROTULO = ['titulo','rotulo','nome','classe','uso','tipo','descricao','cod_imovel'];
 
-function iconeRotulo(texto, cor){
+// Nome curto e claro (para leigos) de cada índice do Satélite.
+const ROTULO_SAT = {
+  rgb:'Cor real', ndvi:'NDVI · vegetação', ndre:'NDRE · clorofila',
+  ndwi:'NDWI · água', ndmi:'NDMI · umidade', bsi:'BSI · solo exposto',
+  nbr:'NBR · queimadas', classificacao:'Uso do solo',
+};
+// Explicação em linguagem simples do que cada índice do Satélite mostra.
+const EXPLICA_SAT = {
+  rgb:'Imagem em cor real, como o olho veria do alto.',
+  ndvi:'Vigor da vegetação: quanto mais verde, mais densa e saudável a planta.',
+  ndre:'Realça a clorofila — ajuda a separar cultura vigorosa de pasto.',
+  ndwi:'Destaca água e umidade na superfície.',
+  ndmi:'Umidade da vegetação (úmida × seca).',
+  bsi:'Destaca solo exposto (áreas sem cobertura vegetal).',
+  nbr:'Realça áreas queimadas / cicatrizes de fogo.',
+  classificacao:'Cada cor é um tipo de uso do solo (água, floresta, pastagem, agricultura…).',
+};
+// Divergências (Analisar): linguagem simples do que foi apontado em cada uma.
+const DIVERGENCIA_INFO = {
+  1: {curto:'Uso fora do consolidado', obs:'Uso produtivo (agricultura/pastagem) fora da Área Consolidada declarada no CAR.'},
+  2: {curto:'Reserva Legal sem mata',  obs:'Parte da Reserva Legal declarada aparece sem cobertura de vegetação.'},
+  3: {curto:'APP ocupada',             obs:'Área de Preservação Permanente com uso antrópico (solo, agricultura, pastagem ou construção).'},
+  4: {curto:'Veg. nativa alterada',    obs:'Área declarada como vegetação nativa aparece sem cobertura vegetal.'},
+};
+// Rótulo curto e claro de uma camada no mapa (leigo). "CAR_APP" → "APP".
+function rotuloCamada(item){
+  if(item.rotulo) return item.rotulo;
+  if(item.grupo === 'ANALISE') return 'Divergências';
+  return String(item.nome || '').replace(/^CAR[_\s]+/, '');
+}
+// Prioridade de quem fica visível quando dois rótulos colidem (0 = mais importante).
+const PRIORIDADE_GRUPO = {
+  AREA_IMOVEL:0, ANALISE:1, APP:2, RESERVA_LEGAL:2, VEGETACAO_NATIVA:3,
+  HIDROGRAFIA:4, USO_RESTRITO:4, SATELITE:5, MAPBIOMAS:6, OUTRO:7, EXTERNA:8,
+};
+
+function iconeRotulo(texto, cor, extraClasse=''){
   return L.divIcon({className:'rotulo-wrap',
-    html:`<span class="rotulo-mapa" style="--rot:${cor||'#555'}">${esc(texto)}</span>`});
+    html:`<span class="rotulo-mapa ${extraClasse}" style="--rot:${cor||'#555'}">${esc(texto)}</span>`});
+}
+
+/* Anti-sobreposição: esconde rótulos que colidem na tela, priorizando os mais
+   importantes. Reroda a cada mover/zoom. Assim os rótulos ficam legíveis. */
+let _declutterAgendado = false;
+function agendarDeclutter(){
+  if(_declutterAgendado) return;
+  _declutterAgendado = true;
+  requestAnimationFrame(() => { _declutterAgendado = false; declutterRotulos(); });
+}
+function declutterRotulos(){
+  if(!state.rotulos.visivel) return;
+  const marks = [];
+  for(const item of state.registro){
+    if(!item.labelLayer || !item.visivel || !map.hasLayer(item.labelLayer)) continue;
+    const pr = PRIORIDADE_GRUPO[item.grupo] ?? 50;
+    for(const m of item.labelLayer.getLayers()){
+      const el = m.getElement && m.getElement();
+      if(!el) continue;
+      marks.push({m, el, span: el.querySelector('.rotulo-mapa') || el, pr});
+    }
+  }
+  marks.sort((a,b) => a.pr - b.pr);
+  const postos = [];
+  const tela = map.getSize();
+  for(const it of marks){
+    const p = map.latLngToContainerPoint(it.m.getLatLng());
+    const w = (it.span.offsetWidth || 60) + 6, h = (it.span.offsetHeight || 16) + 4;
+    if(p.x < -w || p.y < -h || p.x > tela.x + w || p.y > tela.y + h){ it.el.style.visibility = 'hidden'; continue; }
+    const box = {l:p.x - w/2, t:p.y - h/2, r:p.x + w/2, b:p.y + h/2};
+    const colide = postos.some(o => !(box.r < o.l || box.l > o.r || box.b < o.t || box.t > o.b));
+    if(colide){ it.el.style.visibility = 'hidden'; }
+    else { it.el.style.visibility = 'visible'; postos.push(box); }
+  }
 }
 function centroLatLng(item){
   try{ if(item.geojson){ const c = turf.centroid(item.geojson).geometry.coordinates; return [c[1], c[0]]; } }catch{}
@@ -1198,28 +1272,40 @@ function centroLatLng(item){
 function construirRotulos(item){
   if(item.labelLayer){ map.removeLayer(item.labelLayer); }
   const grupo = item.labelLayer = L.layerGroup();
-  const porFeicao = state.rotulos.modo === 'feicao' && item.tipo === 'vector' && item.geojson;
+  const ehDivergencia = item.grupo === 'ANALISE' && item.geojson;
+  // Divergências são SEMPRE apontadas uma a uma — é o objetivo da análise.
+  const porFeicao = ehDivergencia ||
+    (state.rotulos.modo === 'feicao' && item.tipo === 'vector' && item.geojson);
   if(porFeicao){
     const feats = item.geojson.type === 'FeatureCollection' ? item.geojson.features : [item.geojson];
     feats.slice(0, 200).forEach(f => {             // limite p/ não travar em camadas densas
       if(!f.geometry) return;
       let ll; try{ const c = turf.centroid(f).geometry.coordinates; ll = [c[1], c[0]]; }catch{ return; }
       const props = f.properties || {};
-      const chave = ATRIBUTOS_ROTULO.find(k => props[k] != null && String(props[k]).trim());
-      L.marker(ll, {icon:iconeRotulo(chave ? String(props[chave]) : item.nome, item.cor),
-        interactive:false, keyboard:false}).addTo(grupo);
+      let texto, cor = item.cor, cls = '';
+      if(ehDivergencia){
+        const info = DIVERGENCIA_INFO[props.check];
+        texto = '⚠ ' + (info ? info.curto : (props.titulo || 'Divergência'));
+        cor = props.cor || '#d7301f'; cls = 'rot-alerta';
+      } else {
+        const chave = ATRIBUTOS_ROTULO.find(k => props[k] != null && String(props[k]).trim());
+        texto = chave ? String(props[chave]) : rotuloCamada(item);
+      }
+      L.marker(ll, {icon:iconeRotulo(texto, cor, cls), interactive:false, keyboard:false}).addTo(grupo);
     });
   } else {
     const ll = centroLatLng(item);
-    if(ll) L.marker(ll, {icon:iconeRotulo(item.nome, item.cor), interactive:false, keyboard:false}).addTo(grupo);
+    if(ll) L.marker(ll, {icon:iconeRotulo(rotuloCamada(item), item.cor), interactive:false, keyboard:false}).addTo(grupo);
   }
   atualizarVisibilidadeRotulo(item);
+  agendarDeclutter();
   return grupo;
 }
 function atualizarVisibilidadeRotulo(item){
   if(!item.labelLayer) return;
   if(state.rotulos.visivel && item.visivel) item.labelLayer.addTo(map);
   else map.removeLayer(item.labelLayer);
+  agendarDeclutter();
 }
 function aplicarRotulosTodos(){ for(const item of state.registro) construirRotulos(item); }
 function toggleRotulos(){
@@ -2664,13 +2750,13 @@ function boundsDaAOI(geojson){
 }
 
 /* Adiciona um overlay de tiles do Earth Engine como camada gerenciável. */
-function adicionarCamadaGEE(nome, tileUrl, attribution, aoiGeojson){
+function adicionarCamadaGEE(nome, tileUrl, attribution, aoiGeojson, rotulo){
   const anterior = state.registro.find(c => c.nome === nome && c.tipo === 'gee');
   if(anterior) removerCamada(anterior.id);
   const leafletLayer = L.tileLayer(tileUrl, {attribution, opacity:1, maxZoom:19}).addTo(map);
   const bounds = boundsDaAOI(aoiGeojson);
   const item = {id:++state.seq, nome, grupo:'SATELITE', tipo:'gee',
-    leafletLayer, visivel:true, cor:'#00b894', bounds};
+    leafletLayer, visivel:true, cor:'#00b894', bounds, rotulo};
   state.registro.push(item);
   layersControl.addOverlay(leafletLayer, nome);
   atualizarUICamadas();
@@ -2690,7 +2776,7 @@ async function satVisualizar(){
       max_cloud:p.max_cloud, mode:p.mode,
     });
     const nome = `S2 ${layer.toUpperCase()}${r.image_date ? ' '+r.image_date : ''}`;
-    adicionarCamadaGEE(nome, r.tile_url, r.attribution, p.aoi);
+    adicionarCamadaGEE(nome, r.tile_url, r.attribution, p.aoi, ROTULO_SAT[layer] || layer.toUpperCase());
     logTo('log-sat', `✔ ${nome} — ${r.n_images} imagem(ns) no período.`);
     renderLegendaSat(r);
   } catch(e){ logTo('log-sat', `✖ ${e.message}`); }
@@ -2701,9 +2787,11 @@ function renderLegendaSat(r){
   const box = $('res-satelite');
   const legend = (r && r.legend) || [];
   const escala = r && r.escala;
+  const explica = EXPLICA_SAT[r && r.layer] || '';
   if(legend.length){
     // Classificação: cor + nome + critério espectral (transparência do porquê).
     box.innerHTML = `<h3>Legenda — classificação</h3>
+      ${explica ? `<p class="hint" style="margin-top:0"><b>O que é:</b> ${esc(explica)}</p>` : ''}
       <p class="hint" style="margin-top:0">Cada pixel recebe a classe cuja regra espectral (Sentinel-2)
         ele satisfaz primeiro. Os limiares são preliminares (triagem).</p>` +
       legend.map(l => `<div class="leg-item">
@@ -2714,13 +2802,15 @@ function renderLegendaSat(r){
     // Índice contínuo: barra de cor + o que os extremos significam.
     const stops = (escala.palette || []).join(',');
     box.innerHTML = `<h3>Legenda — ${esc(escala.titulo)}</h3>
+      ${explica ? `<p class="hint" style="margin-top:0"><b>O que é:</b> ${esc(explica)}</p>` : ''}
       <div class="leg-bar" style="background:linear-gradient(90deg,${stops})"></div>
       <div class="leg-bar-lab">
         <span>${esc(escala.min_label)}${escala.min != null ? ` (${escala.min})` : ''}</span>
         <span>${esc(escala.max_label)}${escala.max != null ? ` (${escala.max})` : ''}</span>
       </div>`;
   } else {
-    box.innerHTML = '';   // ex.: RGB (cor verdadeira, sem legenda)
+    // ex.: RGB (cor verdadeira) — sem barra, mas explica o que é.
+    box.innerHTML = explica ? `<h3>Cor real (RGB)</h3><p class="hint" style="margin-top:0">${esc(explica)}</p>` : '';
   }
 }
 
@@ -2860,7 +2950,16 @@ function desenharCamadaDivergencias(geojson){
   const layer = L.geoJSON(geojson, {
     style: f => ({color: f.properties.cor || '#e8842c', weight:1,
       fillColor: f.properties.cor || '#e8842c', fillOpacity:.5}),
-    onEachFeature: (f, l) => l.bindPopup(`<b>${esc(f.properties.titulo||'Divergência')}</b>`),
+    onEachFeature: (f, l) => {
+      const info = DIVERGENCIA_INFO[f.properties.check];
+      const tit = info ? info.curto : (f.properties.titulo || 'Divergência');
+      const obs = info ? info.obs : '';
+      l.bindPopup(`<div style="font-size:.85em;max-width:230px">
+        <div style="font-weight:700;color:${f.properties.cor||'#d7301f'}">⚠ ${esc(tit)}</div>
+        ${obs ? `<div style="margin-top:3px;color:var(--text-secondary)">${esc(obs)}</div>` : ''}
+        <div style="margin-top:4px;color:var(--text-tertiary)">Indício preliminar — requer verificação.</div>
+      </div>`);
+    },
   }).addTo(map);
   const item = {id:++state.seq, nome:'Análise — divergências', grupo:'ANALISE',
     tipo:'vector', geojson, leafletLayer:layer, visivel:true, cor:'#e8842c'};
