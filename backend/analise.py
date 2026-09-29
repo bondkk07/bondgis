@@ -2,21 +2,21 @@
 
 Um único fluxo: Selecionar área → Tipo de análise → Processar → Resultado.
 Todos os tipos compartilham os MESMOS intermediários (composição Sentinel-2
-classificada, MapBiomas atual e histórico, geometrias do CAR), mudando apenas
-os módulos executados:
+classificada, geometrias do CAR), mudando apenas os módulos executados:
 
-    completa      = composicao + cruzamentos + score + supressao + recuperacao + temporal
+    completa      = composicao + cruzamentos + score
     auditoria     = composicao + cruzamentos + score
     conformidade  = cruzamentos + score
     vegetacao     = composicao (+ NDVI médio)
-    supressao     = supressao
-    recuperacao   = recuperacao
-    temporal      = temporal
+
+A análise é um retrato do PRESENTE: identifica que tipo de exploração
+(agrária ou não) ocupa a área hoje, a partir do Sentinel-2. Não usa MapBiomas
+— a leitura histórica fica concentrada na aba MapBiomas própria.
 
 A auditoria NÃO usa critérios subjetivos: cada componente do score é um
 cruzamento espacial entre uma camada oficial do CAR e a ocupação observada
-(Sentinel-2, com MapBiomas como validação histórica), com fórmula explícita
-(conforme/avaliada), áreas em ha e justificativa técnica rastreável.
+(Sentinel-2), com fórmula explícita (conforme/avaliada), áreas em ha e
+justificativa técnica rastreável.
 """
 from typing import Any, Dict, List, Optional
 
@@ -26,17 +26,6 @@ from config import get_settings
 from sentinel import (CLASSES, add_indices, build_collection, classify,
                       composite, geometry_from_geojson, latest_date)
 
-# ── MapBiomas (asset oficial no Earth Engine, Coleção 10) ────────────────
-MAPBIOMAS_ASSET = ("projects/mapbiomas-public/assets/brazil/lulc/collection10/"
-                   "mapbiomas_brazil_collection10_integration_v1")
-MAPBIOMAS_ANO_MIN, MAPBIOMAS_ANO_MAX = 1985, 2024
-
-# Agrupamentos de códigos MapBiomas (Coleção 10)
-MB_NATIVA = [1, 3, 4, 5, 6, 49, 10, 11, 12, 32, 29, 50, 13]
-MB_ANTROPICO = [14, 15, 18, 19, 39, 20, 40, 62, 41, 36, 46, 47, 35, 48,
-                9, 21, 22, 23, 24, 30, 25]
-MB_AGUA = [26, 33, 31]
-
 # Agrupamentos das 9 classes Sentinel (sentinel.CLASSES)
 SENT_VEG = [6, 7]                  # Vegetação Secundária + Floresta
 SENT_ANTROPICO = [3, 4, 5, 9]      # Solo, Agricultura, Pastagem, Infraestrutura
@@ -44,8 +33,7 @@ SENT_USO_PRODUTIVO = [4, 5]        # Agricultura + Pastagem
 SENT_AGUA_UMIDA = [1, 2]
 SENT_DEGRADACAO = [3, 8]           # Solo exposto + Queimada
 
-TIPOS_VALIDOS = ["completa", "auditoria", "conformidade", "vegetacao",
-                 "supressao", "recuperacao", "temporal"]
+TIPOS_VALIDOS = ["completa", "auditoria", "conformidade", "vegetacao"]
 
 # Cores/nomes dos cruzamentos (usados também no GeoJSON de divergências)
 CRUZAMENTOS_META = {
@@ -53,7 +41,6 @@ CRUZAMENTOS_META = {
     2: ("Reserva Legal × vegetação existente", "#d7301f"),
     3: ("APP × ocupação observada", "#b30000"),
     4: ("Vegetação Nativa declarada × cobertura atual", "#f2c744"),
-    5: ("Vegetação nativa histórica × cobertura atual (indício de alteração)", "#7f0000"),
 }
 
 
@@ -139,24 +126,12 @@ def run_analise(aoi_geojson: Dict[str, Any],
     img = add_indices(composite(coll, mode)).clip(imovel)
     sent = classify(img)
 
-    ano_atual = min(MAPBIOMAS_ANO_MAX, int(date_end[:4])) if date_end[:4].isdigit() else MAPBIOMAS_ANO_MAX
-    ano_hist = max(MAPBIOMAS_ANO_MIN, ano_atual - 5)
-    mb_img = ee.Image(MAPBIOMAS_ASSET)
-    mb_atual = mb_img.select(f"classification_{ano_atual}").clip(imovel)
-    mb_hist = mb_img.select(f"classification_{ano_hist}").clip(imovel)
-
     sent_veg = _mask_in(sent, SENT_VEG)
     sent_ant = _mask_in(sent, SENT_ANTROPICO)
     sent_prod = _mask_in(sent, SENT_USO_PRODUTIVO)
-    mb_nat_hist = _mask_in(mb_hist, MB_NATIVA)
-    mb_nat_atual = _mask_in(mb_atual, MB_NATIVA)
-    mb_ant_hist = _mask_in(mb_hist, MB_ANTROPICO)
 
     ctx = dict(imovel=imovel, car=car, sent=sent, img=img, scale=scale,
                sent_veg=sent_veg, sent_ant=sent_ant, sent_prod=sent_prod,
-               mb_nat_hist=mb_nat_hist, mb_nat_atual=mb_nat_atual,
-               mb_ant_hist=mb_ant_hist, mb_img=mb_img,
-               ano_atual=ano_atual, ano_hist=ano_hist,
                area_imovel=area_imovel)
 
     # ── Seleção de módulos por tipo ───────────────────────────────────────
@@ -170,12 +145,6 @@ def run_analise(aoi_geojson: Dict[str, Any],
         modulos["cruzamentos"] = cruz
         modulos["score"] = score
         modulos["_geojson"] = geojson
-    if quer("supressao"):
-        modulos["supressao"] = _mod_supressao(ctx)
-    if quer("recuperacao"):
-        modulos["recuperacao"] = _mod_recuperacao(ctx)
-    if quer("temporal"):
-        modulos["temporal"] = _mod_temporal(ctx)
 
     geojson_div = modulos.pop("_geojson", {"type": "FeatureCollection", "features": []})
 
@@ -183,8 +152,6 @@ def run_analise(aoi_geojson: Dict[str, Any],
         "tipo": tipo,
         "n_images": n,
         "image_date": latest_date(coll),
-        "mapbiomas_ano": ano_atual,
-        "mapbiomas_ano_historico": ano_hist,
         "area_total_ha": area_imovel,
         "camadas_recebidas": {k: (v is not None) for k, v in car.items()},
         "modulos": modulos,
@@ -218,7 +185,6 @@ def _mod_cruzamentos_score(ctx):
     arbitrários: quem pondera é a própria área analisada."""
     car, scale, imovel = ctx["car"], ctx["scale"], ctx["imovel"]
     sent_veg, sent_ant, sent_prod = ctx["sent_veg"], ctx["sent_ant"], ctx["sent_prod"]
-    mb_nat_hist = ctx["mb_nat_hist"]
     cruzamentos: List[Dict[str, Any]] = []
     div_img = ee.Image(0).rename("check").toInt()   # divergências p/ GeoJSON
 
@@ -264,17 +230,9 @@ def _mod_cruzamentos_score(ctx):
     extra_rl = None
     if rl is not None:
         rl_ha = round(rl.area(1).getInfo() / 10_000.0, 3)
-        mb_pct = None
-        mb_conf = _area_ha(mb_nat_hist, rl, scale)
-        if rl_ha > 0:
-            mb_pct = round(mb_conf / rl_ha * 100.0, 2)
         extra_rl = {"percentual_rl_sobre_imovel": round(rl_ha / ctx["area_imovel"] * 100.0, 2)
-                    if ctx["area_imovel"] else None,
-                    "validacao_mapbiomas_pct": mb_pct,
-                    "validacao_mapbiomas_nota":
-                        f"Percentual da RL com vegetação nativa no MapBiomas {ctx['ano_hist']} "
-                        "(validação histórica independente)."}
-    add(2, ["Reserva Legal (CAR)"], ["Sentinel-2 (cobertura atual)", "MapBiomas (validação)"],
+                    if ctx["area_imovel"] else None}
+    add(2, ["Reserva Legal (CAR)"], ["Sentinel-2 (cobertura atual)"],
         rl, _dentro(rl), sent_veg,
         "Avalia se a Reserva Legal declarada mantém cobertura vegetal "
         "(floresta ou vegetação secundária no Sentinel-2). Divergente = "
@@ -295,14 +253,6 @@ def _mod_cruzamentos_score(ctx):
         "Avalia se os polígonos declarados como vegetação nativa/remanescente "
         "ainda apresentam cobertura vegetal no Sentinel-2. Divergente = indício "
         "de alteração da cobertura em área declarada como nativa — a verificar.")
-
-    # C5 — Vegetação nativa histórica × supressão recente
-    add(5, [f"MapBiomas {ctx['ano_hist']} (nativa)"], ["Sentinel-2 (uso atual)"],
-        imovel, mb_nat_hist, sent_ant.Not(),
-        f"Avalia se as áreas que eram vegetação nativa no MapBiomas {ctx['ano_hist']} "
-        "continuam sem uso antrópico hoje (Sentinel-2). Divergente = indício de "
-        "alteração da cobertura vegetal (possível supressão a verificar; "
-        "legalidade não avaliada).")
 
     # ── Score: média ponderada pela área avaliada ─────────────────────────
     aplicaveis = [c for c in cruzamentos if c.get("aplicavel") and c.get("area_avaliada_ha", 0) > 0]
@@ -356,55 +306,3 @@ def _vetorizar(div_img: ee.Image, geom: ee.Geometry, scale: int) -> Dict[str, An
         f["properties"] = {"check": cid, "titulo": titulo, "cor": cor}
         feats.append(f)
     return {"type": "FeatureCollection", "features": feats}
-
-
-# ══════════════════════════════════════════════════════════════════════════
-#  Módulos: supressão, recuperação, temporal
-# ══════════════════════════════════════════════════════════════════════════
-def _mod_supressao(ctx) -> Dict[str, Any]:
-    scale, imovel = ctx["scale"], ctx["imovel"]
-    base = _area_ha(ctx["mb_nat_hist"], imovel, scale)
-    mantida = _area_ha(ctx["mb_nat_hist"].And(ctx["sent_ant"].Not()), imovel, scale)
-    suprimida = round(max(0.0, base - mantida), 3)
-    return {
-        "ano_referencia": ctx["ano_hist"],
-        "nativa_historica_ha": base,
-        "mantida_ha": mantida,
-        "suprimida_ha": suprimida,
-        "pct_suprimida": round(suprimida / base * 100.0, 2) if base else 0.0,
-        "justificativa": f"Vegetação nativa no MapBiomas {ctx['ano_hist']} cruzada com o "
-                         "uso atual (Sentinel-2): pixels hoje antrópicos indicam alteração "
-                         "da cobertura vegetal (possível supressão a verificar).",
-    }
-
-
-def _mod_recuperacao(ctx) -> Dict[str, Any]:
-    scale, imovel = ctx["scale"], ctx["imovel"]
-    base = _area_ha(ctx["mb_ant_hist"], imovel, scale)
-    regenerada = _area_ha(ctx["mb_ant_hist"].And(ctx["sent_veg"]), imovel, scale)
-    return {
-        "ano_referencia": ctx["ano_hist"],
-        "antropica_historica_ha": base,
-        "regenerada_ha": regenerada,
-        "pct_regenerada": round(regenerada / base * 100.0, 2) if base else 0.0,
-        "justificativa": f"Áreas antrópicas no MapBiomas {ctx['ano_hist']} que hoje "
-                         "apresentam vegetação no Sentinel-2 = recuperação/regeneração.",
-    }
-
-
-def _mod_temporal(ctx) -> Dict[str, Any]:
-    scale, imovel = ctx["scale"], ctx["imovel"]
-    ano_atual = ctx["ano_atual"]
-    anos = sorted({max(MAPBIOMAS_ANO_MIN, ano_atual - d) for d in (20, 10, 5, 0)})
-    serie = {}
-    for ano in anos:
-        banda = ctx["mb_img"].select(f"classification_{ano}").clip(imovel)
-        serie[str(ano)] = {
-            "nativa_ha": _area_ha(_mask_in(banda, MB_NATIVA), imovel, scale),
-            "antropica_ha": _area_ha(_mask_in(banda, MB_ANTROPICO), imovel, scale),
-            "agua_ha": _area_ha(_mask_in(banda, MB_AGUA), imovel, scale),
-        }
-    return {"fonte": "MapBiomas Coleção 10 (asset Earth Engine)",
-            "anos": serie,
-            "justificativa": "Evolução do uso (nativa/antrópica/água) nos marcos "
-                             f"{', '.join(str(a) for a in anos)}."}

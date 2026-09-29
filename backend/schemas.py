@@ -93,9 +93,6 @@ class TipoAnalise(str, Enum):
     auditoria = "auditoria"
     conformidade = "conformidade"
     vegetacao = "vegetacao"
-    supressao = "supressao"
-    recuperacao = "recuperacao"
-    temporal = "temporal"
 
 
 class CamadasCAR(BaseModel):
@@ -123,8 +120,6 @@ class AnaliseResponse(BaseModel):
     tipo: str
     n_images: int
     image_date: Optional[str] = None
-    mapbiomas_ano: int
-    mapbiomas_ano_historico: int
     area_total_ha: float
     camadas_recebidas: Dict[str, bool]
     modulos: Dict[str, Any]
