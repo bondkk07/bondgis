@@ -4,7 +4,7 @@ from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt
 
 
-class LyssaPlugin:
+class BondGisPlugin:
     def __init__(self, iface):
         self.iface = iface
         self.plugin_dir = os.path.dirname(__file__)
@@ -14,14 +14,14 @@ class LyssaPlugin:
     def initGui(self):
         icon_path = os.path.join(self.plugin_dir, 'icon.png')
         icon = QIcon(icon_path) if os.path.exists(icon_path) else QIcon()
-        self._action = QAction(icon, 'Lyssa – Análise Ambiental', self.iface.mainWindow())
+        self._action = QAction(icon, 'BondGis – Análise Ambiental', self.iface.mainWindow())
         self._action.setCheckable(True)
         self._action.triggered.connect(self._toggle_dock)
-        self.iface.addPluginToMenu('LyssaPlugin', self._action)
+        self.iface.addPluginToMenu('BondGisPlugin', self._action)
         self.iface.addToolBarIcon(self._action)
 
     def unload(self):
-        self.iface.removePluginMenu('LyssaPlugin', self._action)
+        self.iface.removePluginMenu('BondGisPlugin', self._action)
         self.iface.removeToolBarIcon(self._action)
         if self._dock is not None:
             self.iface.removeDockWidget(self._dock)

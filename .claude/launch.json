@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "lyssa-web",
+      "name": "BondGis",
       "runtimeExecutable": "powershell",
       "runtimeArgs": [
         "-NoProfile",

@@ -9,9 +9,9 @@ from .aba_relatorio    import AbaRelatorio
 
 class PainelPrincipal(QDockWidget):
     def __init__(self, iface, parent=None):
-        super().__init__('Lyssa – Análise Ambiental', parent or iface.mainWindow())
+        super().__init__('BondGis – Análise Ambiental', parent or iface.mainWindow())
         self.iface = iface
-        self.setObjectName('LyssaPainelPrincipal')
+        self.setObjectName('BondGisPainelPrincipal')
         self.setMinimumWidth(380)
 
         container = QWidget()

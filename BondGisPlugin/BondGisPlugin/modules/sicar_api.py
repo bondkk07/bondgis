@@ -184,7 +184,7 @@ def carregar_no_qgis(resultados: list) -> list:
         elif geojson and geojson.get('features'):
             tmp = tempfile.NamedTemporaryFile(
                 mode='w', suffix='.geojson',
-                prefix=f'lyssa_sicar_{item.get("nome","layer")}_',
+                prefix=f'bondgis_sicar_{item.get("nome","layer")}_',
                 delete=False, encoding='utf-8',
             )
             json.dump(geojson, tmp, ensure_ascii=False)
@@ -238,7 +238,7 @@ def _http_get(url: str) -> str:
     req = urllib.request.Request(
         url,
         headers={
-            'User-Agent': 'Mozilla/5.0 (QGIS LyssaPlugin/1.0)',
+            'User-Agent': 'Mozilla/5.0 (QGIS BondGisPlugin/1.0)',
             'Accept':     'application/json, */*',
         }
     )

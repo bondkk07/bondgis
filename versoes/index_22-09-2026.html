@@ -692,7 +692,7 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
 <script>
 'use strict';
 /* ════════════════════════════════════════════════════════════════════
-   BONDGIS — porte do plugin QGIS LyssaPlugin (Murilo Tavares) para a web.
+   BONDGIS — porte do plugin QGIS BondGisPlugin (Murilo Tavares) para a web.
    Módulos portados: importar_car, sicar_api,
    mapbiomas (+classes), camadas_externas, verificar_sobreposicao, relatorio.
    ════════════════════════════════════════════════════════════════════ */
@@ -991,7 +991,7 @@ let _apiSalvo = localStorage.getItem('bondgis_api') || '';
 if(_apiSalvo && /localhost|127\.0\.0\.1/.test(_apiSalvo) && !API_PADRAO.includes('localhost'))
   _apiSalvo = '';
 let cfg = {
-  proxy: localStorage.getItem('lyssa_proxy') || '',
+  proxy: localStorage.getItem('bondgis_proxy') || '',
   apiBase: _apiSalvo || API_PADRAO,
 };
 
@@ -1991,7 +1991,7 @@ function exportarCsvTemporal(){
     l.map(v => /[",;\n]/.test(v) ? `"${v.replaceAll('"','""')}"` : v).join(',')).join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
-  a.download = 'lyssa_cobertura_temporal.csv';
+  a.download = 'bondgis_cobertura_temporal.csv';
   a.click();
   URL.revokeObjectURL(a.href);
 }
@@ -2270,7 +2270,7 @@ function abrirCfg(){
 function salvarCfg(){
   cfg.proxy = $('inp-proxy').value.trim();
   cfg.apiBase = $('inp-api').value.trim().replace(/\/+$/, '');
-  localStorage.setItem('lyssa_proxy', cfg.proxy);
+  localStorage.setItem('bondgis_proxy', cfg.proxy);
   localStorage.setItem('bondgis_api', cfg.apiBase);
   $('modal-cfg').classList.remove('on');
   atualizarStatusSatelite();

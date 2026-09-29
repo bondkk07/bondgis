@@ -312,7 +312,7 @@ def _fetch_json(url):
     req = urllib.request.Request(
         url,
         headers={
-            'User-Agent': 'Mozilla/5.0 (QGIS LyssaPlugin/1.0)',
+            'User-Agent': 'Mozilla/5.0 (QGIS BondGisPlugin/1.0)',
             'Accept':     'application/json, */*',
         }
     )

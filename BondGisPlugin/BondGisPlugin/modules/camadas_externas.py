@@ -273,7 +273,7 @@ def adicionar_camada_arcgis(camada_info: dict) -> None:
 
     req = urllib.request.Request(
         full_url,
-        headers={'User-Agent': 'QGIS-LyssaPlugin/1.0'},
+        headers={'User-Agent': 'QGIS-BondGisPlugin/1.0'},
     )
     with urllib.request.urlopen(req, timeout=60) as resp:
         geojson_data = resp.read().decode('utf-8')

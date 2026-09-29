@@ -26,7 +26,7 @@ def extrair_shapefiles_zip(zip_path: str) -> list:
     Returns:
         Lista de {'path': str, 'nome': str} para cada shapefile encontrado.
     """
-    temp_dir = tempfile.mkdtemp(prefix='lyssa_zip_')
+    temp_dir = tempfile.mkdtemp(prefix='bondgis_zip_')
     _extrair_recursivo(zip_path, temp_dir)
     resultado = []
     for shp_path in sorted(_listar_shapefiles(temp_dir)):

@@ -43,7 +43,7 @@ def gerar_extrato_ambiental_html(
     now  = datetime.now().strftime('%d/%m/%Y %H:%M')
     html = _html_ambiental(area_imovel, linhas, area_benef, now)
 
-    path = os.path.join(tempfile.gettempdir(), 'lyssa_extrato_ambiental.html')
+    path = os.path.join(tempfile.gettempdir(), 'bondgis_extrato_ambiental.html')
     with open(path, 'w', encoding='utf-8') as fh:
         fh.write(html)
     return path
@@ -63,7 +63,7 @@ def gerar_extrato_temporal_html(resultados_mapbiomas: dict) -> str:
     now  = datetime.now().strftime('%d/%m/%Y %H:%M')
     html = _html_temporal(lulc, meta, now)
 
-    path = os.path.join(tempfile.gettempdir(), 'lyssa_extrato_temporal.html')
+    path = os.path.join(tempfile.gettempdir(), 'bondgis_extrato_temporal.html')
     with open(path, 'w', encoding='utf-8') as fh:
         fh.write(html)
     return path
@@ -75,7 +75,7 @@ def exportar_csv_temporal(resultados_mapbiomas: dict) -> str:
     anos   = sorted(lulc.keys())
     classes = _coletar_classes(lulc)
 
-    path = os.path.join(tempfile.gettempdir(), 'lyssa_cobertura_temporal.csv')
+    path = os.path.join(tempfile.gettempdir(), 'bondgis_cobertura_temporal.csv')
     with open(path, 'w', newline='', encoding='utf-8-sig') as fh:
         writer = csv.writer(fh)
         writer.writerow(['Classe'] + anos)
@@ -123,7 +123,7 @@ def gerar_relatorio_sobreposicao_html(
     now  = datetime.now().strftime('%d/%m/%Y %H:%M')
     html = _html_sobreposicao(sorted_res, codigo_car, area_imovel_ha, now, resultado_mapbiomas)
 
-    path = os.path.join(tempfile.gettempdir(), 'lyssa_extrato_ambiental.html')
+    path = os.path.join(tempfile.gettempdir(), 'bondgis_extrato_ambiental.html')
     with open(path, 'w', encoding='utf-8') as fh:
         fh.write(html)
     return path
@@ -202,7 +202,7 @@ def _html_sobreposicao(resultados, codigo_car, area_imovel_ha, data_hora, mapbio
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Extrato de Análise Ambiental – Lyssa</title>
+<title>Extrato de Análise Ambiental – BondGis</title>
 <style>
   *{{box-sizing:border-box;margin:0;padding:0}}
   body{{font-family:"Segoe UI",Arial,sans-serif;background:#f4f6f8;color:#1a2530}}
@@ -290,7 +290,7 @@ def _html_sobreposicao(resultados, codigo_car, area_imovel_ha, data_hora, mapbio
 
   {mb_section}
 
-  <p class="footer">Gerado pelo plugin Lyssa – QGIS &nbsp;|&nbsp; {_html_escape.escape(data_hora)}</p>
+  <p class="footer">Gerado pelo plugin BondGis – QGIS &nbsp;|&nbsp; {_html_escape.escape(data_hora)}</p>
 </div>
 </body>
 </html>'''
@@ -323,7 +323,7 @@ def _html_ambiental(area_imovel, linhas, area_benef, data_hora):
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Extrato Ambiental – Lyssa</title>
+<title>Extrato Ambiental – BondGis</title>
 <style>
   body {{font-family:Arial,sans-serif;margin:30px;color:#222}}
   h1   {{color:#1a7f4b;margin-bottom:4px}}
@@ -343,7 +343,7 @@ def _html_ambiental(area_imovel, linhas, area_benef, data_hora):
   <thead><tr><th>Camada</th><th>Área (ha)</th><th>% do Imóvel</th></tr></thead>
   <tbody>{rows}{benef_row}</tbody>
 </table>
-<p class="footer">Gerado pelo plugin Lyssa – QGIS</p>
+<p class="footer">Gerado pelo plugin BondGis – QGIS</p>
 </body>
 </html>'''
 
@@ -379,7 +379,7 @@ def _html_temporal(lulc, meta, data_hora):
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Extrato Temporal MapBiomas – Lyssa</title>
+<title>Extrato Temporal MapBiomas – BondGis</title>
 <style>
   body {{font-family:Arial,sans-serif;margin:30px;color:#222}}
   h1   {{color:#1a7f4b;margin-bottom:4px}}
@@ -401,6 +401,6 @@ def _html_temporal(lulc, meta, data_hora):
   <thead>{header}</thead>
   <tbody>{rows}</tbody>
 </table>
-<p class="footer">Fonte: MapBiomas Brasil Coleção 10.1 &nbsp;|&nbsp; Plugin Lyssa – QGIS</p>
+<p class="footer">Fonte: MapBiomas Brasil Coleção 10.1 &nbsp;|&nbsp; Plugin BondGis – QGIS</p>
 </body>
 </html>'''
