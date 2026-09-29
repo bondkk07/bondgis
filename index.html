@@ -237,6 +237,29 @@ select[multiple]{padding:4px}
   border-radius:6px;transition:all var(--dur) var(--ease);display:flex;align-items:center;justify-content:center;
 }
 .camada-item button:hover{color:var(--text);background:var(--surface-hover)}
+.camada-badge{
+  flex-shrink:0;font-size:10px;font-weight:600;letter-spacing:.02em;color:var(--text-secondary);
+  background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:1px 7px;
+}
+/* Controle de rótulos (topo da aba Camadas) */
+.rotulos-ctrl{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:8px 0 2px}
+.rot-toggle{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--text);cursor:pointer}
+.rot-toggle input{accent-color:var(--accent);width:14px;height:14px;cursor:pointer}
+.rot-seg{display:inline-flex;border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden}
+.rot-seg button{
+  border:none;background:var(--surface);color:var(--text-secondary);font-size:11.5px;
+  padding:4px 10px;cursor:pointer;transition:all var(--dur) var(--ease);
+}
+.rot-seg button+button{border-left:1px solid var(--border)}
+.rot-seg button.on{background:var(--accent);color:#fff}
+/* Rótulo desenhado sobre o mapa */
+.rotulo-wrap{background:none;border:none}
+.rotulo-mapa{
+  display:inline-block;white-space:nowrap;transform:translate(-50%,-50%);
+  font-size:11px;font-weight:600;line-height:1.3;color:#fff;padding:2px 7px;border-radius:6px;
+  background:var(--rot,#555);border:1px solid rgba(255,255,255,.65);
+  box-shadow:0 1px 4px rgba(0,0,0,.35);text-shadow:0 1px 2px rgba(0,0,0,.45);
+}
 
 /* ── Catálogo externo ──────────────────────────────────── */
 .cat-grupo{font-size:10.5px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.07em;margin:16px 0 6px}
@@ -616,6 +639,16 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
     <!-- ══ ABA: CAMADAS ═══════════════════════════════════ -->
     <section class="painel" id="tab-camadas">
       <h3>Camadas do projeto</h3>
+      <div class="rotulos-ctrl">
+        <label class="rot-toggle"><input type="checkbox" id="chk-rotulos" checked onchange="toggleRotulos()">
+          Rótulos no mapa</label>
+        <div class="rot-seg" title="Como rotular: nome da camada ou por feição">
+          <button id="rot-modo-camada" class="on" onclick="setModoRotulo('camada')">Por camada</button>
+          <button id="rot-modo-feicao" onclick="setModoRotulo('feicao')">Por feição</button>
+        </div>
+      </div>
+      <p class="hint" style="margin-top:2px">Passe o mouse num item para realçar no mapa; use
+        <b>Destacar</b> para dar zoom e piscar a camada.</p>
       <div id="lista-camadas"><div class="empty-state">Nenhuma camada carregada.</div></div>
 
       <h3>Catálogo de fontes externas</h3>
@@ -966,12 +999,13 @@ const CORES_GRUPO = {
 
 /* ── Estado global ────────────────────────────────────────────────── */
 const state = {
-  registro: [],            // [{id, nome, grupo, tipo:'vector'|'wms', geojson, leafletLayer, visivel}]
+  registro: [],            // [{id, nome, grupo, tipo:'vector'|'wms', geojson, leafletLayer, visivel, labelLayer}]
   seq: 0,
   codigoCar: '',
   resultadoMapBiomas: null,
   resultadoSobrep: null,
   resultadoAnalise: null,
+  rotulos: { visivel: true, modo: 'camada' },   // rótulos no mapa: on/off e modo (camada|feicao)
 };
 // Backend padrão: em localhost usa o backend local (dev); publicado, usa o
 // serviço no Cloud Run. O usuário pode sobrescrever em ⚙ Configurações.
@@ -1089,7 +1123,8 @@ function adicionarCamadaVetorial(nome, geojson, grupo='OUTRO', zoom=true){
       const props = f.properties || {};
       const linhas = Object.entries(props).slice(0, 12)
         .map(([k,v]) => `<b>${esc(k)}</b>: ${esc(v)}`).join('<br>');
-      if(linhas) l.bindPopup(`<div style="max-height:220px;overflow:auto;font-size:.85em">${linhas}</div>`);
+      const cab = `<div style="font-weight:700;color:${cor};margin-bottom:4px">${esc(nome)}</div>`;
+      l.bindPopup(`<div style="max-height:240px;overflow:auto;font-size:.85em">${cab}${linhas || '<span style="color:var(--text-tertiary)">sem atributos</span>'}</div>`);
     },
   }).addTo(map);
   const item = {id:++state.seq, nome, grupo, tipo:'vector', geojson, leafletLayer, visivel:true, cor};
@@ -1115,6 +1150,7 @@ function removerCamada(id){
   if(i < 0) return;
   const c = state.registro[i];
   map.removeLayer(c.leafletLayer);
+  if(c.labelLayer) map.removeLayer(c.labelLayer);
   if(c.tipo === 'gee') layersControl.removeLayer(c.leafletLayer);
   state.registro.splice(i, 1);
   atualizarUICamadas();
@@ -1124,6 +1160,7 @@ function alternarCamada(id){
   if(!c) return;
   c.visivel = !c.visivel;
   c.visivel ? map.addLayer(c.leafletLayer) : map.removeLayer(c.leafletLayer);
+  atualizarVisibilidadeRotulo(c);
   atualizarUICamadas();
 }
 function zoomCamada(id){
@@ -1137,17 +1174,123 @@ function zoomCamada(id){
 }
 const camadasVetoriais = () => state.registro.filter(c => c.tipo === 'vector');
 
+/* ── Rótulos no mapa e destaque de camadas ───────────────────────── */
+// Selo curto por grupo, para a lista e os rótulos deixarem claro o que é cada camada.
+const GRUPO_LABEL = {
+  AREA_IMOVEL:'Imóvel', APP:'APP', RESERVA_LEGAL:'Reserva Legal',
+  VEGETACAO_NATIVA:'Veg. Nativa', HIDROGRAFIA:'Hidrografia', USO_RESTRITO:'Uso Restrito',
+  OUTRO:'CAR', EXTERNA:'Externa', SATELITE:'Satélite', ANALISE:'Análise', MAPBIOMAS:'MapBiomas',
+};
+// Atributos preferidos para o rótulo POR FEIÇÃO (usa o primeiro que existir).
+const ATRIBUTOS_ROTULO = ['titulo','rotulo','nome','classe','uso','tipo','descricao','cod_imovel'];
+
+function iconeRotulo(texto, cor){
+  return L.divIcon({className:'rotulo-wrap',
+    html:`<span class="rotulo-mapa" style="--rot:${cor||'#555'}">${esc(texto)}</span>`});
+}
+function centroLatLng(item){
+  try{ if(item.geojson){ const c = turf.centroid(item.geojson).geometry.coordinates; return [c[1], c[0]]; } }catch{}
+  const b = (item.bounds && item.bounds.isValid) ? item.bounds
+          : (item.leafletLayer && item.leafletLayer.getBounds ? item.leafletLayer.getBounds() : null);
+  return (b && b.isValid && b.isValid()) ? b.getCenter() : null;
+}
+// (Re)constrói o labelLayer da camada conforme o modo atual (camada|feição).
+function construirRotulos(item){
+  if(item.labelLayer){ map.removeLayer(item.labelLayer); }
+  const grupo = item.labelLayer = L.layerGroup();
+  const porFeicao = state.rotulos.modo === 'feicao' && item.tipo === 'vector' && item.geojson;
+  if(porFeicao){
+    const feats = item.geojson.type === 'FeatureCollection' ? item.geojson.features : [item.geojson];
+    feats.slice(0, 200).forEach(f => {             // limite p/ não travar em camadas densas
+      if(!f.geometry) return;
+      let ll; try{ const c = turf.centroid(f).geometry.coordinates; ll = [c[1], c[0]]; }catch{ return; }
+      const props = f.properties || {};
+      const chave = ATRIBUTOS_ROTULO.find(k => props[k] != null && String(props[k]).trim());
+      L.marker(ll, {icon:iconeRotulo(chave ? String(props[chave]) : item.nome, item.cor),
+        interactive:false, keyboard:false}).addTo(grupo);
+    });
+  } else {
+    const ll = centroLatLng(item);
+    if(ll) L.marker(ll, {icon:iconeRotulo(item.nome, item.cor), interactive:false, keyboard:false}).addTo(grupo);
+  }
+  atualizarVisibilidadeRotulo(item);
+  return grupo;
+}
+function atualizarVisibilidadeRotulo(item){
+  if(!item.labelLayer) return;
+  if(state.rotulos.visivel && item.visivel) item.labelLayer.addTo(map);
+  else map.removeLayer(item.labelLayer);
+}
+function aplicarRotulosTodos(){ for(const item of state.registro) construirRotulos(item); }
+function toggleRotulos(){
+  state.rotulos.visivel = !state.rotulos.visivel;
+  for(const item of state.registro) atualizarVisibilidadeRotulo(item);
+  atualizarUICamadas();
+}
+function setModoRotulo(modo){
+  if(state.rotulos.modo === modo) return;
+  state.rotulos.modo = modo;
+  if(state.rotulos.visivel) aplicarRotulosTodos();
+  atualizarUICamadas();
+}
+// Realce leve ao passar o mouse no item da lista.
+function realcarCamada(id, on){
+  const c = state.registro.find(x => x.id === id);
+  if(!c || !c.visivel) return;
+  if(c.tipo === 'vector' && c.leafletLayer.setStyle){
+    if(on){ c.leafletLayer.setStyle({weight:5, color:'#111'}); c.leafletLayer.bringToFront?.(); }
+    else  { c.leafletLayer.setStyle({weight:2, color:c.cor}); }
+  }
+}
+// Destaca a camada: zoom + "piscada" para localizar rapidamente.
+function destacarCamada(id){
+  const c = state.registro.find(x => x.id === id);
+  if(!c) return;
+  if(!c.visivel) alternarCamada(id);
+  zoomCamada(id);
+  if(c.tipo === 'vector' && c.leafletLayer.setStyle){
+    c.leafletLayer.bringToFront?.();
+    let n = 0;
+    const piscar = () => {
+      const forte = n % 2 === 0;
+      c.leafletLayer.setStyle(forte
+        ? {weight:6, color:'#111', fillOpacity:.55}
+        : {weight:2, color:c.cor, fillOpacity: c.grupo==='AREA_IMOVEL'?0.05:0.28});
+      if(++n < 6) setTimeout(piscar, 250);
+    };
+    piscar();
+  } else if(c.leafletLayer.setOpacity){          // raster (gee/wms/mapbiomas)
+    const base = c.tipo === 'gee' ? 1 : 0.85;
+    let n = 0;
+    const pulsar = () => { c.leafletLayer.setOpacity(n % 2 === 0 ? 0.2 : base); if(++n < 6) setTimeout(pulsar, 220); };
+    pulsar();
+  }
+}
+
 function atualizarUICamadas(){
+  // Garante um rótulo para cada camada nova (uma vez); modo/visibilidade atuais.
+  for(const item of state.registro) if(!item.labelLayer) construirRotulos(item);
+
+  // Estado do controle de rótulos (topo da aba Camadas)
+  const chk = $('chk-rotulos'); if(chk) chk.checked = state.rotulos.visivel;
+  const segC = $('rot-modo-camada'), segF = $('rot-modo-feicao');
+  if(segC && segF){
+    segC.classList.toggle('on', state.rotulos.modo === 'camada');
+    segF.classList.toggle('on', state.rotulos.modo === 'feicao');
+  }
+
   // Lista na aba Camadas
   const el = $('lista-camadas');
   if(!state.registro.length){
     el.innerHTML = '<div class="empty-state">Nenhuma camada carregada.</div>';
   } else {
     el.innerHTML = state.registro.map(c => `
-      <div class="camada-item">
-        <input type="checkbox" ${c.visivel?'checked':''} onchange="alternarCamada(${c.id})">
+      <div class="camada-item" onmouseenter="realcarCamada(${c.id},true)" onmouseleave="realcarCamada(${c.id},false)">
+        <input type="checkbox" ${c.visivel?'checked':''} onchange="alternarCamada(${c.id})" title="Mostrar/ocultar">
         <span class="cor" style="background:${c.cor}"></span>
         <span class="nome" title="${esc(c.nome)}">${esc(c.nome)}</span>
+        <span class="camada-badge">${esc(GRUPO_LABEL[c.grupo] || c.grupo)}</span>
+        <button title="Destacar (zoom + piscar)" onclick="destacarCamada(${c.id})"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg></button>
         ${c.tipo!=='wms' ? `<button title="Zoom" onclick="zoomCamada(${c.id})"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></button>` : ''}
         <button title="Remover" onclick="removerCamada(${c.id})"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
       </div>`).join('');
