@@ -13,7 +13,7 @@ backend — apenas a aba **Satélite** depende dele.
 
 ```
 Navegador (index.html, GitHub Pages)
-        │  POST /api/tiles | /api/stats | /api/dates | /api/timeseries
+        │  POST /api/tiles | /api/dates | /api/timeseries | /api/analise
         ▼
 FastAPI (este backend, hospedado à parte)
         │  earthengine-api (service account)
@@ -127,7 +127,7 @@ A aba **Satélite** mostrará "✔ Backend online · Earth Engine ativo".
 | POST   | `/api/tiles`       | URL de tiles de uma camada (rgb/ndvi/.../classificacao). |
 | POST   | `/api/dates`       | Datas de imagens disponíveis no período/filtro.       |
 | POST   | `/api/timeseries`  | Série temporal (média do índice na AOI por imagem).   |
-| POST   | `/api/analise`     | **Fluxo único de análise** (`tipo`: completa, auditoria, conformidade, vegetacao, supressao, recuperacao, temporal). Cruza CAR × Sentinel-2 × MapBiomas no mesmo pipeline, com score de conformidade transparente e GeoJSON das divergências. Ver `REVISAO_ARQUITETURAL.md`. |
+| POST   | `/api/analise`     | **Fluxo único de análise** (`tipo`: completa, auditoria, conformidade, vegetacao). Cruza as camadas do CAR com a ocupação observada (Sentinel-2) no mesmo pipeline, com score de conformidade transparente e GeoJSON das divergências. Ver `REVISAO_ARQUITETURAL.md`. |
 
 Corpo comum (JSON):
 
@@ -185,9 +185,9 @@ resultados, veja `optional_postgis.py` e `schema.sql` (instruções no topo do
 
 ## 8. Notas sobre a classificação
 
-A classificação em 9 classes (Água, Solo exposto, Vegetação rasteira,
-Pastagem, Agricultura, Vegetação arbustiva, Floresta, Área queimada, Área
-construída) é **preliminar**, baseada em limiares de índices espectrais
+A classificação em 9 classes (Água, Área Úmida, Solo Exposto, Agricultura,
+Pastagem, Vegetação Secundária, Floresta, Área Queimada, Infraestrutura) é
+**preliminar**, baseada em limiares de índices espectrais
 (`sentinel.py → classify`). Serve como diagnóstico rápido; para uso oficial,
 ajuste os limiares à sua região ou substitua por um classificador treinado
 (Random Forest no próprio Earth Engine, por exemplo).

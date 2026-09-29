@@ -1,10 +1,10 @@
 """Processamento Sentinel-2 no Google Earth Engine.
 
-Implementa: mÃ¡scara de nuvens, composiÃ§Ãµes (recente/mediana), bandas
-B2â€“B12, Ã­ndices espectrais (NDVI, NDRE, NDWI, NDMI, BSI, NBR), classificaÃ§Ã£o
-automÃ¡tica baseada em regras e estatÃ­sticas por classe recortadas pela AOI.
+Implementa: máscara de nuvens, composições (recente/mediana), bandas
+B2–B12, índices espectrais (NDVI, NDRE, NDWI, NDMI, BSI, NBR), classificação
+automática baseada em regras e estatísticas por classe recortadas pela AOI.
 
-Todas as funÃ§Ãµes assumem que ee.Initialize jÃ¡ foi chamado (earth_engine.py).
+Todas as funções assumem que ee.Initialize já foi chamado (earth_engine.py).
 """
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -12,11 +12,11 @@ import ee
 
 from config import get_settings
 
-# â”€â”€ Bandas Sentinel-2 usadas (nomes na coleÃ§Ã£o S2_SR_HARMONIZED) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Bandas Sentinel-2 usadas (nomes na coleção S2_SR_HARMONIZED) ──────────
 # B2 Blue, B3 Green, B4 Red, B5/B6/B7 RedEdge, B8 NIR, B11 SWIR1, B12 SWIR2
 S2_BANDS = ["B2", "B3", "B4", "B5", "B6", "B7", "B8", "B11", "B12"]
 
-# â”€â”€ Paletas de visualizaÃ§Ã£o por Ã­ndice â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Paletas de visualização por índice ────────────────────────────────────
 PALETTE_NDVI = ["#a50026", "#d73027", "#f46d43", "#fdae61", "#fee08b",
                 "#d9ef8b", "#a6d96a", "#66bd63", "#1a9850", "#006837"]
 PALETTE_WATER = ["#ffffcc", "#a1dab4", "#41b6c4", "#2c7fb8", "#253494"]
@@ -24,19 +24,19 @@ PALETTE_MOIST = ["#8c510a", "#d8b365", "#f6e8c3", "#c7eae5", "#5ab4ac", "#01665e
 PALETTE_SOIL = ["#004529", "#78c679", "#ffffe5", "#fe9929", "#993404"]
 PALETTE_BURN = ["#000000", "#7f0000", "#d7301f", "#fc8d59", "#fdcc8a", "#fef0d9"]
 
-# â”€â”€ ClassificaÃ§Ã£o automÃ¡tica (cÃ³digo â†’ nome, cor) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# ClassificaÃ§Ã£o ÃšNICA do sistema (usada por tiles, anÃ¡lises e auditoria).
-# Antes existiam dois classificadores quase idÃªnticos (sentinel.classify e
-# auditoria.classify_audit) â€” foram unificados neste.
+# ── Classificação automática (código → nome, cor) ─────────────────────────
+# Classificação ÚNICA do sistema (usada por tiles, análises e auditoria).
+# Antes existiam dois classificadores quase idênticos (sentinel.classify e
+# auditoria.classify_audit) — foram unificados neste.
 CLASSES: Dict[int, Tuple[str, str]] = {
-    1: ("Ãgua", "#2c7fb8"),
-    2: ("Ãrea Ãšmida", "#41b6c4"),
+    1: ("Água", "#2c7fb8"),
+    2: ("Área Úmida", "#41b6c4"),
     3: ("Solo Exposto", "#a6611a"),
     4: ("Agricultura", "#fdae61"),
     5: ("Pastagem", "#addd8e"),
-    6: ("VegetaÃ§Ã£o SecundÃ¡ria", "#78c679"),
+    6: ("Vegetação Secundária", "#78c679"),
     7: ("Floresta", "#006837"),
-    8: ("Ãrea Queimada", "#7f0000"),
+    8: ("Área Queimada", "#7f0000"),
     9: ("Infraestrutura", "#969696"),
 }
 CLASS_PALETTE = [CLASSES[i][1] for i in sorted(CLASSES)]
@@ -56,12 +56,12 @@ CLASS_CRITERIOS: Dict[int, str] = {
 }
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-#  AOI, coleÃ§Ã£o e mÃ¡scara de nuvens
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ══════════════════════════════════════════════════════════════════════════
+#  AOI, coleção e máscara de nuvens
+# ══════════════════════════════════════════════════════════════════════════
 def geometry_from_geojson(aoi: Dict[str, Any]) -> ee.Geometry:
     """Aceita Geometry, Feature ou FeatureCollection GeoJSON e devolve uma
-    Ãºnica ee.Geometry (dissolvida)."""
+    única ee.Geometry (dissolvida)."""
     t = aoi.get("type")
     if t == "FeatureCollection":
         feats = [ee.Feature(f["geometry"]) for f in aoi.get("features", []) if f.get("geometry")]
@@ -74,16 +74,16 @@ def geometry_from_geojson(aoi: Dict[str, Any]) -> ee.Geometry:
         return ee.Geometry(aoi["geometry"])
     if t in ("Polygon", "MultiPolygon", "GeometryCollection"):
         return ee.Geometry(aoi)
-    raise ValueError(f"GeoJSON nÃ£o suportado: {t!r}")
+    raise ValueError(f"GeoJSON não suportado: {t!r}")
 
 
 def _mask_s2_sr(img: ee.Image) -> ee.Image:
-    """MÃ¡scara de nuvens/sombra usando a banda SCL (Scene Classification).
-    Remove: 3 sombra, 8 nuvem mÃ©dia, 9 nuvem alta, 10 cirrus, 11 neve."""
+    """Máscara de nuvens/sombra usando a banda SCL (Scene Classification).
+    Remove: 3 sombra, 8 nuvem média, 9 nuvem alta, 10 cirrus, 11 neve."""
     scl = img.select("SCL")
     mask = (scl.neq(3).And(scl.neq(8)).And(scl.neq(9))
             .And(scl.neq(10)).And(scl.neq(11)))
-    # ReflectÃ¢ncia SR vem em escala 0â€“10000.
+    # Reflectância SR vem em escala 0–10000.
     scaled = img.select(S2_BANDS).divide(10000)
     return scaled.updateMask(mask).copyProperties(img, ["system:time_start", "CLOUDY_PIXEL_PERCENTAGE"])
 
@@ -99,11 +99,11 @@ def build_collection(aoi: ee.Geometry, date_start: str, date_end: str,
 
 
 def composite(coll: ee.ImageCollection, mode: str) -> ee.Image:
-    """Reduz a coleÃ§Ã£o a uma imagem. 'recent' = imagem mais recente com
-    prioridade (mosaic sobre coleÃ§Ã£o ordenada); 'median' = mediana."""
+    """Reduz a coleção a uma imagem. 'recent' = imagem mais recente com
+    prioridade (mosaic sobre coleção ordenada); 'median' = mediana."""
     if mode == "median":
         return coll.median()
-    # recent: ordena por data crescente e faz mosaic â†’ pixels mais recentes no topo
+    # recent: ordena por data crescente e faz mosaic → pixels mais recentes no topo
     return coll.sort("system:time_start").mosaic()
 
 
@@ -121,9 +121,9 @@ def latest_date(coll: ee.ImageCollection) -> Optional[str]:
         return None
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-#  Ãndices espectrais
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ══════════════════════════════════════════════════════════════════════════
+#  Índices espectrais
+# ══════════════════════════════════════════════════════════════════════════
 def add_indices(img: ee.Image) -> ee.Image:
     ndvi = img.normalizedDifference(["B8", "B4"]).rename("NDVI")
     ndre = img.normalizedDifference(["B8", "B5"]).rename("NDRE")
@@ -139,9 +139,9 @@ def add_indices(img: ee.Image) -> ee.Image:
     return img.addBands([ndvi, ndre, ndwi, ndmi, nbr, bsi])
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-#  ClassificaÃ§Ã£o automÃ¡tica baseada em regras (preliminar)
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ══════════════════════════════════════════════════════════════════════════
+#  Classificação automática baseada em regras (preliminar)
+# ══════════════════════════════════════════════════════════════════════════
 def classify(img: ee.Image) -> ee.Image:
     """Classificação por limiares de índices espectrais (banda inteira 'class',
     1–9). A ordem das regras vai da mais específica para a mais genérica; os
@@ -184,9 +184,9 @@ def classify(img: ee.Image) -> ee.Image:
     return c.updateMask(c.gt(0))
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-#  VisualizaÃ§Ã£o (getMapId) por camada
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ══════════════════════════════════════════════════════════════════════════
+#  Visualização (getMapId) por camada
+# ══════════════════════════════════════════════════════════════════════════
 def _vis_for(layer: str) -> Dict[str, Any]:
     if layer == "rgb":
         return {"bands": ["B4", "B3", "B2"], "min": 0.02, "max": 0.3, "gamma": 1.1}
@@ -263,9 +263,9 @@ def make_tiles(aoi_geojson: Dict[str, Any], layer: str, date_start: str,
     }
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-#  Datas disponÃ­veis e sÃ©rie temporal
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ══════════════════════════════════════════════════════════════════════════
+#  Datas disponíveis e série temporal
+# ══════════════════════════════════════════════════════════════════════════
 def list_dates(aoi_geojson: Dict[str, Any], date_start: str, date_end: str,
                max_cloud: float, mode: str) -> Dict[str, Any]:
     aoi = geometry_from_geojson(aoi_geojson)
@@ -292,7 +292,7 @@ def list_dates(aoi_geojson: Dict[str, Any], date_start: str, date_end: str,
 
 def time_series(aoi_geojson: Dict[str, Any], index: str, date_start: str,
                 date_end: str, max_cloud: float, mode: str) -> Dict[str, Any]:
-    """MÃ©dia do Ã­ndice sobre a AOI por imagem, ao longo do perÃ­odo."""
+    """Média do índice sobre a AOI por imagem, ao longo do período."""
     s = get_settings()
     aoi = geometry_from_geojson(aoi_geojson)
     coll = build_collection(aoi, date_start, date_end, max_cloud)
