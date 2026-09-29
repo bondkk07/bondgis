@@ -1016,8 +1016,14 @@ function toast(msg, type='info', ms=5000){
   if(ms) setTimeout(remove, ms);
 }
 
+// Usado pelo geotiff.js para ler os COGs do MapBiomas. O bucket público
+// (storage.googleapis.com) NÃO envia CORS, então o navegador bloqueia a
+// leitura direta — roteamos pelo /api/proxy do backend (que repassa o Range,
+// devolvendo só a janela do COG). Ordem: proxy manual → backend → direto.
 function withProxy(url){
-  return cfg.proxy ? cfg.proxy + encodeURIComponent(url) : url;
+  if(cfg.proxy) return cfg.proxy + encodeURIComponent(url);
+  if(cfg.apiBase) return cfg.apiBase + '/api/proxy?url=' + encodeURIComponent(url);
+  return url;
 }
 // Resolve a URL de fetch para consultas WFS/ArcGIS. Muitos GeoServers de
 // governo (SICAR consulta, FUNAI, IPHAN…) NÃO enviam CORS, então o navegador

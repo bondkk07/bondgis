@@ -10,13 +10,14 @@ trafega para o frontend.
 """
 import logging
 import ssl
+from typing import Dict, Optional
 from urllib.parse import urlparse
 
 import requests
 import urllib3
 from requests.adapters import HTTPAdapter
 from urllib3.util.ssl_ import create_urllib3_context
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
@@ -80,6 +81,9 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
+    # Expostos p/ o navegador ler o tamanho/pedaço em respostas de Range —
+    # necessário para o geotiff.js ler os COGs do MapBiomas via /api/proxy.
+    expose_headers=["Content-Range", "Accept-Ranges", "Content-Length"],
 )
 
 
@@ -104,17 +108,20 @@ def _ensure_ee() -> None:
             )
 
 
-def _fetch_allowlisted(url: str, timeout: int = 60,
-                       allow_redirects: bool = True) -> requests.Response:
+def _fetch_allowlisted(url: str, timeout: int = 60, allow_redirects: bool = True,
+                       headers_extra: Optional[Dict[str, str]] = None) -> requests.Response:
     """GET server-side com fallback de TLS legado. Valida a allowlist e
     levanta HTTPException(403/502). Compartilhado por /api/proxy e /api/ping.
     O ping usa allow_redirects=False: qualquer resposta HTTP (mesmo 3xx) já
     prova que o servidor está no ar, e evita seguir redirects quebrados
-    (ex.: geoserver.car.gov.br 301 → HTTP:80 inacessível)."""
+    (ex.: geoserver.car.gov.br 301 → HTTP:80 inacessível). headers_extra
+    repassa cabeçalhos do cliente (ex.: Range, para leitura parcial de COGs)."""
     host = (urlparse(url).hostname or "").lower()
     if host not in ALLOWED_PROXY_HOSTS:
         raise HTTPException(status_code=403, detail=f"Host não autorizado: {host}")
     headers = {"User-Agent": "BondGis/1.0"}
+    if headers_extra:
+        headers.update(headers_extra)
     try:
         return requests.get(url, timeout=timeout, headers=headers, allow_redirects=allow_redirects)
     except requests.exceptions.SSLError:
@@ -131,15 +138,23 @@ def _fetch_allowlisted(url: str, timeout: int = 60,
 
 
 @app.get("/api/proxy")
-def proxy(url: str = Query(..., description="URL pública (host na allowlist) a repassar")):
-    """Proxy CORS para GeoServers públicos que não enviam cabeçalhos CORS.
-    Resolve o problema de o navegador bloquear as camadas subsidiárias do
-    SICAR (consulta.car.gov.br) e demais fontes. Só repassa hosts da allowlist."""
-    r = _fetch_allowlisted(url)
+def proxy(url: str = Query(..., description="URL pública (host na allowlist) a repassar"),
+          range_header: Optional[str] = Header(default=None, alias="range")):
+    """Proxy CORS para fontes públicas que não enviam cabeçalhos CORS.
+    Resolve o navegador bloquear as camadas subsidiárias do SICAR
+    (consulta.car.gov.br), as demais fontes e os COGs do MapBiomas
+    (storage.googleapis.com, sem CORS). Só repassa hosts da allowlist.
+    Repassa o header Range e devolve o 206/Content-Range do upstream — assim
+    o geotiff.js lê só a janela do COG, sem baixar o raster inteiro (~800 MB)."""
+    extra = {"Range": range_header} if range_header else None
+    r = _fetch_allowlisted(url, headers_extra=extra)
+    passthru = {h: r.headers[h] for h in ("Content-Range", "Accept-Ranges", "Content-Length")
+                if h in r.headers}
     return Response(
         content=r.content,
         status_code=r.status_code,
         media_type=r.headers.get("content-type", "application/octet-stream"),
+        headers=passthru,
     )
 
 
