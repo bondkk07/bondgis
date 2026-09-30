@@ -136,7 +136,24 @@ header .spacer{flex:1}
   width:428px;min-width:428px;background:var(--bg-elevated);border-right:1px solid var(--border-subtle);
   display:flex;flex-direction:row;min-height:0;transition:transform .28s var(--ease);
 }
-.map-wrap{flex:1;min-width:0;padding:14px;display:flex}
+.map-wrap{flex:1;min-width:0;padding:14px;display:flex;position:relative}
+/* Indicador global de carregamento/renderização sobre o mapa */
+.map-loading{
+  position:absolute;top:24px;left:50%;transform:translateX(-50%);z-index:1200;
+  display:flex;align-items:center;gap:9px;max-width:min(80%,420px);
+  padding:8px 15px;border-radius:999px;background:var(--surface);
+  border:1px solid var(--border-strong);box-shadow:var(--shadow-md);
+  font-size:12.5px;font-weight:500;color:var(--text);
+  animation:fadeSlide .2s var(--ease);
+}
+.map-loading[hidden]{display:none}
+.map-loading .map-loading-txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.map-loading .spin{
+  width:15px;height:15px;flex-shrink:0;border-radius:50%;
+  border:2px solid var(--border-strong);border-top-color:var(--accent);
+  animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
 #map{flex:1;border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-md);border:1px solid var(--border-subtle)}
 .mb-raster{image-rendering:pixelated}   /* pixels de 30 m nítidos nos overlays MapBiomas */
 #sidebar-overlay{display:none;position:fixed;inset:58px 0 0 0;background:rgba(2,6,15,.55);z-index:150;backdrop-filter:blur(2px)}
@@ -673,7 +690,12 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
     </div>
   </aside>
 
-  <div class="map-wrap"><div id="map"></div></div>
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div id="map-loading" class="map-loading" role="status" aria-live="polite" hidden>
+      <span class="spin"></span><span class="map-loading-txt">Carregando…</span>
+    </div>
+  </div>
 </div>
 
 <!-- ══ MODAL CONFIGURAÇÕES ══════════════════════════════ -->
@@ -1054,6 +1076,32 @@ function toast(msg, type='info', ms=5000){
   if(ms) setTimeout(remove, ms);
 }
 
+/* ── Indicador global de carregamento/renderização (badge no mapa) ──
+   Vários processos podem estar ativos ao mesmo tempo (busca no CAR, leitura
+   de COG, tiles do satélite pintando…). Cada um pega um token; o badge some
+   sozinho quando o último termina. */
+const _cargas = new Map();   // token → mensagem
+let _cargaSeq = 0;
+function iniciarCarga(msg){ const id = ++_cargaSeq; _cargas.set(id, msg || 'Carregando…'); renderCarga(); return id; }
+function atualizarCarga(id, msg){ if(_cargas.has(id)){ _cargas.set(id, msg); renderCarga(); } }
+function terminarCarga(id){ if(id != null && _cargas.delete(id)) renderCarga(); }
+function renderCarga(){
+  const el = $('map-loading'); if(!el) return;
+  const msgs = [..._cargas.values()];
+  if(!msgs.length){ el.hidden = true; return; }
+  el.hidden = false;
+  el.querySelector('.map-loading-txt').textContent =
+    msgs.length === 1 ? msgs[0] : `${msgs[0]} · +${msgs.length - 1}`;
+}
+// Mostra "Renderizando…" enquanto uma camada de tiles (GEE/WMS) pinta no mapa.
+function monitorarTiles(leafletLayer, nome){
+  let tok = null;
+  const fim = () => { if(tok != null){ terminarCarga(tok); tok = null; } };
+  leafletLayer.on('loading', () => { if(tok == null) tok = iniciarCarga(`Renderizando ${esc(nome)}…`); });
+  leafletLayer.on('load', fim);
+  leafletLayer.on('remove', fim);
+}
+
 // Usado pelo geotiff.js para ler os COGs do MapBiomas. O bucket público
 // (storage.googleapis.com) NÃO envia CORS, então o navegador bloqueia a
 // leitura direta — roteamos pelo /api/proxy do backend (que repassa o Range,
@@ -1144,6 +1192,7 @@ function adicionarCamadaWMS(info){
   const params = {layers:info.layers, format:info.format||'image/png', transparent:info.format!=='image/jpeg'};
   Object.assign(params, info.params || {});
   const leafletLayer = L.tileLayer.wms(info.url, params).addTo(map);
+  monitorarTiles(leafletLayer, info.titulo);
   const item = {id:++state.seq, nome:info.titulo, grupo:'EXTERNA', tipo:'wms', leafletLayer, visivel:true, cor:'#8e44ad'};
   state.registro.push(item);
   atualizarUICamadas();
@@ -1461,6 +1510,7 @@ async function buscarSicar(){
 
   const btn = $('btn-buscar-car');
   btn.disabled = true;
+  const tok = iniciarCarga('Buscando imóvel no CAR…');
   logTo('log-car', `Buscando área do imóvel (${uf.toUpperCase()})...`, true);
   try{
     const geojson = await fetchJson(
@@ -1471,6 +1521,7 @@ async function buscarSicar(){
     adicionarCamadaVetorial('CAR_Área do Imóvel', geojson, 'AREA_IMOVEL');
     logTo('log-car', `✔ Área do Imóvel carregada (${geojson.features.length} feição/ões).`);
 
+    atualizarCarga(tok, 'Carregando camadas do CAR…');
     logTo('log-car', `Buscando ${CAMADAS_CONSULTA.length} camadas do CAR (com retentativa automática)...`);
     let carregadas = 0, vazias = 0, concluidas = 0;
     const falharam = [];
@@ -1499,7 +1550,7 @@ async function buscarSicar(){
   } catch(e){
     logTo('log-car', `✖ ${e.message}`);
     logTo('log-car', 'Dica: falhas de rede geralmente são CORS — configure um proxy em Configurações.');
-  } finally { btn.disabled = false; }
+  } finally { btn.disabled = false; terminarCarga(tok); }
 }
 
 /* ── Importar ZIP do CAR (equivalente a importar_car.py) ──────────── */
@@ -1786,8 +1837,9 @@ async function analisarMapBiomas(){
 
   const btn = $('btn-mapbiomas'), prog = $('prog-mb');
   btn.disabled = true; prog.style.display = 'block'; prog.value = 0;
+  const tok = iniciarCarga(`Lendo MapBiomas (${mod.semAnos ? 'raster' : anos.length + ' ano(s)'})…`);
   logTo('log-mb', `${mod.rotulo} — analisando ${mod.semAnos ? 'raster único' : anos.length + ' ano(s)'}...`, true);
-
+  try{
   const areaTotalHa = calcularAreaHa(geomUnida);
   const [minX, minY, maxX, maxY] = turf.bbox(geomUnida);
   const pctBase = mod.pctBaseImovel ? areaTotalHa : null;
@@ -1798,6 +1850,7 @@ async function analisarMapBiomas(){
   for(let i = 0; i < anos.length; i++){
     const ano = anos[i];
     const chaveAno = mod.semAnos ? '1985–2023' : String(ano);
+    atualizarCarga(tok, mod.semAnos ? 'Lendo MapBiomas…' : `Lendo MapBiomas ${ano} (${i+1}/${anos.length})…`);
     logTo('log-mb', mod.semAnos ? 'Lendo raster de ano de formação...' : `[${i+1}/${anos.length}] Lendo COG ${ano}...`);
     try{
       const jan = await lerJanelaCOG(mod.url(ano), minX, minY, maxX, maxY);
@@ -1827,7 +1880,7 @@ async function analisarMapBiomas(){
   };
   renderMapBiomas();
   logTo('log-mb', '✔ Análise concluída.');
-  btn.disabled = false;
+  } finally { btn.disabled = false; terminarCarga(tok); }
 }
 function renderMapBiomas(){
   const {lulc, meta} = state.resultadoMapBiomas;
@@ -2754,6 +2807,7 @@ function adicionarCamadaGEE(nome, tileUrl, attribution, aoiGeojson, rotulo){
   const anterior = state.registro.find(c => c.nome === nome && c.tipo === 'gee');
   if(anterior) removerCamada(anterior.id);
   const leafletLayer = L.tileLayer(tileUrl, {attribution, opacity:1, maxZoom:19}).addTo(map);
+  monitorarTiles(leafletLayer, rotulo || nome);
   const bounds = boundsDaAOI(aoiGeojson);
   const item = {id:++state.seq, nome, grupo:'SATELITE', tipo:'gee',
     leafletLayer, visivel:true, cor:'#00b894', bounds, rotulo};
@@ -2769,6 +2823,7 @@ async function satVisualizar(){
   const layer = $('sel-sat-layer').value;
   const btn = $('btn-sat-visualizar'), prog = $('prog-sat');
   btn.disabled = true; prog.style.display = 'block'; prog.removeAttribute('value');
+  const tok = iniciarCarga(`Gerando ${ROTULO_SAT[layer] || layer.toUpperCase()} no servidor…`);
   logTo('log-sat', `Gerando camada "${layer}" no servidor…`, true);
   try{
     const r = await apiPost('/api/tiles', {
@@ -2780,7 +2835,7 @@ async function satVisualizar(){
     logTo('log-sat', `✔ ${nome} — ${r.n_images} imagem(ns) no período.`);
     renderLegendaSat(r);
   } catch(e){ logTo('log-sat', `✖ ${e.message}`); }
-  finally { btn.disabled = false; prog.style.display = 'none'; }
+  finally { btn.disabled = false; prog.style.display = 'none'; terminarCarga(tok); }
 }
 
 function renderLegendaSat(r){
@@ -2927,6 +2982,7 @@ async function executarAnalise(){
 
   const btn = $('btn-analisar'), prog = $('prog-ana');
   btn.disabled = true; prog.style.display = 'block'; prog.removeAttribute('value');
+  const tok = iniciarCarga('Analisando a área no servidor…');
   logTo('log-ana', `Processando "${$('sel-ana-tipo').selectedOptions[0].text}" no servidor…`, true);
   try{
     const r = await apiPost('/api/analise', {
@@ -2939,7 +2995,7 @@ async function executarAnalise(){
     renderAnalise(r);
     logTo('log-ana', '✔ Análise concluída.');
   } catch(e){ logTo('log-ana', `✖ ${e.message}`); }
-  finally { btn.disabled = false; prog.style.display = 'none'; }
+  finally { btn.disabled = false; prog.style.display = 'none'; terminarCarga(tok); }
 }
 
 // Camada Leaflet das divergências (cor por cruzamento de origem).
