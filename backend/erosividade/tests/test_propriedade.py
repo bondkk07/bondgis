@@ -56,11 +56,36 @@ def test_variante_A_liga_retorno():
     r = pr.calcular({}, chuva, 1)
     assert r["metodo_R"].startswith("A")
     assert r["n_anos"] == 6
-    assert [x["T"] for x in r["retorno"]] == [2, 5, 10, 20, 50, 100]
+    # Weibull empírico (Eq. 8 e 9 do artigo): com 6 anos só vale até T = N+1 = 7
+    assert [x["T"] for x in r["retorno"]] == [2, 5]
     rs = [x["R"] for x in r["retorno"]]
     assert rs == sorted(rs)                    # crescente com T
     assert r["ic_media"] and r["ic_media"][0] < r["R"] < r["ic_media"][1]
     assert r["cv"] is not None
+
+
+def test_artigo_weibull_mk_sen_cs():
+    """Conferências do método descrito no artigo (seções 2.4 e 2.8)."""
+    from erosividade import estatistica as st
+    serie = [float(x) for x in range(1, 46)]           # 45 anos crescentes
+    anos = list(range(1981, 2026))
+    assert st.declive_sen(anos, serie) == 1.0
+    assert st.mann_kendall_p(serie) < 0.001
+    assert st.mann_kendall_p([5.0, 5.0, 5.0, 5.0]) == 1.0
+    # T = (N+1)/m: o maior de 45 anos tem T = 46; T=2 cai entre m=23 e m=22
+    assert abs(st.r_retorno_weibull(serie, 46) - 45) < 1e-9
+    assert st.r_retorno_weibull(serie, 50) is None
+    assert 22 <= st.r_retorno_weibull(serie, 2) <= 24
+    # CS e classes da Tabela 1
+    meses, P = CACOAL
+    anos_c = [{"ano": 2000 + i, "meses": meses, "P": P} for i in range(6)]
+    chuva = _chuva_manual(meses, P)
+    chuva["anos_completos"] = anos_c
+    r = pr.calcular({}, chuva, 1)
+    assert 0 < r["cs_out_abr"] <= 100
+    assert r["tendencia"] is not None
+    from erosividade import fator_r as fr
+    assert fr.classe(2000) == "fraca" and fr.classe(9900) == "muito forte"
 
 
 def run_all():

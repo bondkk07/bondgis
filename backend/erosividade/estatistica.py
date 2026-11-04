@@ -17,6 +17,45 @@ def weibull(N: int, m: int) -> Dict:
     return {"T": T, "Pr": 100.0 / T}
 
 
+def r_retorno_weibull(serie: List[float], T: float):
+    """R associado ao período de retorno T pela posição de Weibull (Equações 8 e 9
+    do artigo), com interpolação linear entre os anos ordenados. None se T > N+1."""
+    n = len(serie)
+    if n < 2 or T > n + 1:
+        return None
+    ordem = sorted(serie, reverse=True)
+    pares = sorted(((n + 1) / m, x) for m, x in enumerate(ordem, start=1))
+    for (t0, x0), (t1, x1) in zip(pares, pares[1:]):
+        if t0 <= T <= t1:
+            return x0 + (x1 - x0) * (T - t0) / (t1 - t0)
+    return None
+
+
+def mann_kendall_p(serie: List[float]) -> float:
+    """Valor-p bilateral do teste de Mann-Kendall (Mann, 1945), com correção de empates."""
+    n = len(serie)
+    s = sum((serie[j] > serie[i]) - (serie[j] < serie[i])
+            for i in range(n - 1) for j in range(i + 1, n))
+    cont = {}
+    for x in serie:
+        cont[x] = cont.get(x, 0) + 1
+    var = (n * (n - 1) * (2 * n + 5) - sum(t * (t - 1) * (2 * t + 5) for t in cont.values())) / 18.0
+    if var <= 0:
+        return 1.0
+    z = (s - 1) / math.sqrt(var) if s > 0 else (s + 1) / math.sqrt(var) if s < 0 else 0.0
+    return math.erfc(abs(z) / math.sqrt(2.0))
+
+
+def declive_sen(anos: List[float], serie: List[float]) -> float:
+    """Declive de Sen (Sen, 1968): mediana das inclinações entre todos os pares."""
+    d = sorted((serie[j] - serie[i]) / (anos[j] - anos[i])
+               for i in range(len(serie) - 1) for j in range(i + 1, len(serie)) if anos[j] != anos[i])
+    if not d:
+        return 0.0
+    k = len(d) // 2
+    return d[k] if len(d) % 2 else (d[k - 1] + d[k]) / 2.0
+
+
 # ── Distribuições teóricas (§7) ──────────────────────────────────────────
 def gumbel_chow_k(T: float) -> float:
     """Fator de frequência de Gumbel–Chow:

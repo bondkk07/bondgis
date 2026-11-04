@@ -3262,7 +3262,7 @@ function corScoreHex(v){
    SVG inline (sem lib de gráfico). Chuva via CHIRPS (backend) ou manual. */
 let _eroResultado = null;
 const _fmtR = v => (v == null ? '—' : Number(v).toLocaleString('pt-BR', {maximumFractionDigits: 0}));
-const COR_CLASSE = {'baixa':'#1a9850','média':'#a6d96a','média a forte':'#fee08b','forte':'#fdae61','muito forte':'#d7301f'};
+const COR_CLASSE = {'fraca':'#1a9850','moderada':'#a6d96a','moderada a forte':'#fee08b','forte':'#fdae61','muito forte':'#d7301f'};
 const COR_CONF = {'alta':'#1a9850','média':'#f2c744','baixa':'#d7301f'};
 
 function _eroImovelGeo(){
@@ -3353,7 +3353,7 @@ function renderErosividade(r){
   const confCor = COR_CONF[r.confianca] || 'var(--text-tertiary)';
   const faixa = r.faixa_sensibilidade ? `${_fmtR(r.faixa_sensibilidade[0])} – ${_fmtR(r.faixa_sensibilidade[1])}` : '—';
   const temRet = r.retorno && r.retorno.length;
-  const retCard = temRet ? [2,10,50].map(T=>{
+  const retCard = temRet ? [2,5,10].map(T=>{
     const x = r.retorno.find(o=>o.T===T); return x ? `<div style="text-align:center"><div style="font-size:.72em;color:var(--text-tertiary)">${T} anos</div><div style="font-weight:700">${_fmtR(x.R)}</div></div>`:'';
   }).join('') : '';
   const retTabela = temRet ? `<table style="width:100%;font-size:.82em;border-collapse:collapse;margin-top:6px">
@@ -3367,6 +3367,7 @@ function renderErosividade(r){
     ${r.n_anos?`<div><b>Anos (série):</b> ${r.n_anos}${r.cv!=null?` · CV ${r.cv}%`:''}</div>`:''}
     <div><b>Equação:</b> ${esc(meto.equacao||'—')}</div>
     <div><b>Índice:</b> ${esc(meto.indice||'—')} · <b>Classes:</b> ${esc(meto.classes||'—')}</div>
+    ${meto.periodo_retorno?`<div><b>Período de retorno:</b> ${esc(meto.periodo_retorno)}${meto.metodo_espacial?` · <b>Chuva sobre o imóvel:</b> ${meto.metodo_espacial==='centroide'?'pixel do centroide':'média ponderada no polígono'}`:''}</div>`:''}
     <div><b>Regime:</b> ${esc(r.regime?r.regime.rotulo:'—')} · <b>R climatológico (B):</b> ${_fmtR(r.R_climatologico)}</div>
     ${r.area_ha!=null?`<div><b>Área:</b> ${_fmtR(r.area_ha)} ha · <b>P média:</b> ${_fmtR(r.chuva.P_medio)} mm/ano</div>`:`<div><b>P informada:</b> ${_fmtR(r.chuva.P_medio)} mm/ano</div>`}
     <div style="color:var(--text-tertiary);margin-top:4px">Cálculo: ${esc(meto.data_calculo||'')}</div>
@@ -3399,7 +3400,7 @@ function renderErosividade(r){
         <button id="ero-btn-metodo" onclick="eroTab('metodo')">Metodologia</button>
       </div>
       <div id="ero-tab-mensal">${_svgMensal(r)}
-        <div class="hint">Barras = EI mensal (laranja = crítico, EI&gt;500). Azul = % acumulada. Período crítico: ${esc((r.periodo_critico.meses||[]).join(', '))} (${r.periodo_critico.pct}%).</div></div>
+        <div class="hint">Barras = EI mensal (laranja = crítico, EI&gt;500). Azul = % acumulada. Período crítico: ${esc((r.periodo_critico.meses||[]).join(', '))} (${r.periodo_critico.pct}%).${r.cs_out_abr!=null?` ${String(r.cs_out_abr).replace('.',',')}% da erosividade ocorre entre outubro e abril.`:''}${r.tendencia?` Tendência (Mann-Kendall): ${r.tendencia.significativa?'significativa':'não significativa'}, Sen = ${String(r.tendencia.sen_por_ano).replace('.',',')} por ano (p = ${String(r.tendencia.p_mann_kendall).replace('.',',')}).`:''}<br>Estimativa em grade de ~5 km (CHIRPS); não substitui a medição local.</div></div>
       <div id="ero-tab-sens" style="display:none">${_svgSens(r)}
         <div class="hint">R com equações alternativas do mesmo regime; a escolhida em destaque. A escolha da equação é a maior fonte de incerteza.</div></div>
       <div id="ero-tab-metodo" style="display:none">${metoHtml}</div>
@@ -3413,6 +3414,8 @@ function exportarErosividadeCSV(){
   csv += `Classe;${r.classe}`+nl + `Confianca;${r.confianca}`+nl;
   csv += `Metodo;${r.metodo_R}`+nl + `Fonte chuva;${r.metodologia.fonte_chuva}`+nl;
   csv += `Periodo;${r.metodologia.periodo}`+nl + `Equacao;${r.metodologia.equacao}`+nl;
+  if(r.cs_out_abr!=null) csv += `CS out-abr (%);${r.cs_out_abr}`+nl;
+  if(r.tendencia) csv += `Sen (por ano);${r.tendencia.sen_por_ano}`+nl + `p Mann-Kendall;${r.tendencia.p_mann_kendall}`+nl;
   if(r.area_ha!=null) csv += `Area (ha);${r.area_ha}`+nl;
   csv += nl + 'Mes;EI mensal;%;% acumulada'+nl;
   r.meses.forEach((m,i)=>{ csv += `${m};${r.ei_mensal[i]};${r.pct[i]};${r.pct_acumulada[i]}`+nl; });

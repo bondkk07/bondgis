@@ -159,6 +159,10 @@ class ErosividadeResponse(BaseModel):
     meses_criticos: List[str]
     periodo_critico: Dict[str, Any]
     serie_R_anual: List[float] = []
+    anos_serie: List[int] = []
+    chuva_anos: List[Dict[str, Any]] = []
+    cs_out_abr: Optional[float] = None
+    tendencia: Optional[Dict[str, Any]] = None
     n_anos: int = 0
     cv: Optional[float] = None
     retorno: List[Dict[str, Any]] = []

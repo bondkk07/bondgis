@@ -16,7 +16,7 @@ from . import equacoes as eqs
 from . import estatistica as st
 from . import fator_r as fr
 
-T_RETORNO = [2, 5, 10, 20, 50, 100]
+T_RETORNO = [2, 5, 10, 20]   # Weibull empírico só vale até T = N+1 (45 anos → 46)
 MES_SECO_MM = 60.0          # limiar p/ contar meses secos (regime)
 
 # t de Student bilateral (α=0,05 → 0,025 por cauda) por grau de liberdade.
@@ -100,14 +100,40 @@ def calcular(aoi_geojson: Dict[str, Any], chuva: Dict[str, Any],
     A = fr.variante_A(completos, eq) if completos else {"R": None, "n_anos": 0}
     R_oficial = A["R"] if A.get("R") else B["R"]
 
-    # ── período de retorno / IC / Mokus (da série anual) ────────────────────
+    # ── distribuição mensal: média dos EI de cada ano (ano a ano, como no artigo)
+    dist = B
+    if A.get("ei_mensal"):
+        ei_A = A["ei_mensal"]
+        tot = sum(ei_A)
+        acum, s_ = [], 0.0
+        for e in ei_A:
+            s_ += e
+            acum.append(100.0 * s_ / tot if tot else 0.0)
+        dist = {"ei_mensal": ei_A, "pct": [100.0 * e / tot if tot else 0.0 for e in ei_A],
+                "pct_acumulada": acum,
+                "meses_criticos": [fr.MESES[i] for i, e in enumerate(ei_A) if e > fr.EI_MES_CRITICO],
+                "periodo_critico": fr.periodo_critico(ei_A)}
+    tot_d = sum(dist["ei_mensal"])
+    cs_out_abr = (100.0 * sum(dist["ei_mensal"][i] for i in (9, 10, 11, 0, 1, 2, 3)) / tot_d) if tot_d else None
+
+    # ── período de retorno (Weibull, Eq. 8 e 9), tendência (Mann-Kendall/Sen), IC, Mokus
     retorno: List[Dict] = []
+    tendencia = None
     ic = None
     mokus_anos = None
     if A.get("serie_R_anual") and A["n_anos"] >= 5:
         Rm, S, N = A["R"], A["desvio"], A["n_anos"]
+        serie = A["serie_R_anual"]
         for T in T_RETORNO:
-            retorno.append({"T": T, "R": round(st.x_t_gumbel(Rm, S, T), 1)})
+            r_t = st.r_retorno_weibull(serie, T)
+            if r_t is not None:
+                retorno.append({"T": T, "R": round(r_t, 1)})
+        anos_A = [a["ano"] for a in completos if a.get("meses") and len(a["meses"]) == 12
+                  and all(m is not None for m in a["meses"])]
+        if len(anos_A) == len(serie):
+            p_mk = st.mann_kendall_p(serie)
+            tendencia = {"sen_por_ano": round(st.declive_sen(anos_A, serie), 1),
+                         "p_mann_kendall": round(p_mk, 3), "significativa": p_mk < 0.05}
         t = _t_student(N - 1)
         lo, hi = st.ic_media(Rm, S, N, t)
         ic = [round(lo, 1), round(hi, 1)]
@@ -144,12 +170,14 @@ def calcular(aoi_geojson: Dict[str, Any], chuva: Dict[str, Any],
         "faixa_sensibilidade": faixa,
         "ic_media": ic,
         "mokus_anos": mokus_anos,
-        "ei_mensal": [round(v, 1) for v in B["ei_mensal"]],
-        "pct": [round(v, 1) for v in B["pct"]],
-        "pct_acumulada": [round(v, 1) for v in B["pct_acumulada"]],
+        "ei_mensal": [round(v, 1) for v in dist["ei_mensal"]],
+        "pct": [round(v, 1) for v in dist["pct"]],
+        "pct_acumulada": [round(v, 1) for v in dist["pct_acumulada"]],
+        "cs_out_abr": round(cs_out_abr, 1) if cs_out_abr is not None else None,
+        "tendencia": tendencia,
         "meses": fr.MESES,
-        "meses_criticos": B["meses_criticos"],
-        "periodo_critico": B["periodo_critico"],
+        "meses_criticos": dist["meses_criticos"],
+        "periodo_critico": dist["periodo_critico"],
         "serie_R_anual": [round(v, 1) for v in (A.get("serie_R_anual") or [])],
         "n_anos": A.get("n_anos", 0),
         "cv": round(A.get("cv"), 1) if A.get("cv") is not None else None,
@@ -169,13 +197,18 @@ def calcular(aoi_geojson: Dict[str, Any], chuva: Dict[str, Any],
             "escala_m": chuva.get("escala_m"),
             "equacao": f"{eq.nome} — {eq.referencia}",
             "indice": "EI30 via coeficiente de chuva (Rc = p²/P)",
-            "classes": "Carvalho (1994), CPRM",
+            "classes": "Carvalho (2008)",
+            "periodo_retorno": "Weibull empírico, T = (N+1)/m",
+            "metodo_espacial": chuva.get("metodo_espacial"),
             "data_calculo": date.today().isoformat(),
             "limitacoes": [
                 "A USLE estima média de longo prazo, não um evento isolado; não considera deposição.",
                 "O método Rc mede volume e concentração da chuva, não a intensidade.",
             ],
         },
+        # série mensal ano a ano (mm), usada na comparação com estações (artigo, seção 2.7)
+        "chuva_anos": [{"ano": a["ano"], "meses": a["meses"]} for a in (chuva.get("anos_completos") or [])],
+        "anos_serie": [a["ano"] for a in (chuva.get("anos_completos") or [])],
         "area_ha": chuva.get("area_ha"),
         "centroide": chuva.get("centroide"),
         "unidade_R": "MJ·mm·ha⁻¹·h⁻¹·ano⁻¹",

@@ -13,9 +13,9 @@ from .equacoes import Equacao, PADRAO
 
 FATOR_SI = 9.81   # t·m·mm/ha·h  →  MJ·mm/ha·h  (§2.7)
 
-# Classes de Carvalho (1994, CPRM) — §8
+# Classes de Carvalho (2008) — Tabela 1 do artigo
 CLASSES = [
-    (2452.0, "baixa"), (4905.0, "média"), (7357.0, "média a forte"),
+    (2452.0, "fraca"), (4905.0, "moderada"), (7357.0, "moderada a forte"),
     (9810.0, "forte"), (float("inf"), "muito forte"),
 ]
 EI_MES_CRITICO = 500.0   # Rufino 1986 (§8)
