@@ -48,9 +48,12 @@ import analise
 import sentinel
 from config import get_settings
 from earth_engine import init_earth_engine, is_initialized
+from erosividade import chuva_ee, propriedade
+from erosividade.equacoes import BIBLIOTECA
 from schemas import (
     AnaliseRequest, AnaliseResponse,
     DatesRequest, DatesResponse, HealthResponse,
+    ErosividadeRequest, ErosividadeResponse, EquacaoInfo, EquacoesResponse,
     TilesRequest, TilesResponse, TimeSeriesRequest, TimeSeriesResponse,
 )
 
@@ -273,6 +276,53 @@ def analisar_area(req: AnaliseRequest) -> AnaliseResponse:
         logger.exception("Erro em /api/analise")
         raise HTTPException(status_code=500, detail=f"Erro na análise: {exc}")
     return AnaliseResponse(**data)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  EROSIVIDADE (fator R da USLE) — chuva do CHIRPS (EE) ou override manual
+# ══════════════════════════════════════════════════════════════════════════
+@app.get("/api/erosividade/equacoes", response_model=EquacoesResponse)
+def erosividade_equacoes() -> EquacoesResponse:
+    """Biblioteca de equações (para a aba montar o seletor de sensibilidade)."""
+    return EquacoesResponse(equacoes=[
+        EquacaoInfo(id=e.id, nome=e.nome, local=e.local, koppen=e.koppen,
+                    referencia=e.referencia, ativa=e.ativa, usar_para=e.usar_para)
+        for e in BIBLIOTECA
+    ])
+
+
+@app.post("/api/erosividade", response_model=ErosividadeResponse)
+def erosividade(req: ErosividadeRequest) -> ErosividadeResponse:
+    """Fator R da propriedade. Sem chuva_manual → chuva do CHIRPS (Earth Engine)
+    sobre o polígono; com chuva_manual → usa as médias informadas (sem EE)."""
+    try:
+        if req.chuva_manual is not None:
+            if len(req.chuva_manual.meses) != 12:
+                raise ValueError("Informe as 12 médias mensais (jan→dez).")
+            chuva = {
+                "fonte": "Entrada manual (médias informadas)",
+                "periodo": "—", "n_anos": 0, "anos": [], "anos_completos": [],
+                "meses_medios": [float(v) for v in req.chuva_manual.meses],
+                "P_medio": float(req.chuva_manual.P),
+                "escala_m": None, "area_ha": None, "centroide": None,
+            }
+        else:
+            _ensure_ee()
+            kw = {}
+            if req.ano_ini:
+                kw["ano_ini"] = req.ano_ini
+            if req.ano_fim:
+                kw["ano_fim"] = req.ano_fim
+            chuva = chuva_ee.chuva_mensal_chirps(req.aoi, **kw)
+        data = propriedade.calcular(req.aoi, chuva, req.equacao_id, req.alternativas)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Erro em /api/erosividade")
+        raise HTTPException(status_code=500, detail=f"Erro na erosividade: {exc}")
+    return ErosividadeResponse(**data)
 
 
 if __name__ == "__main__":

@@ -453,6 +453,10 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
         <span>Analisar</span>
       </button>
+      <button data-tab="erosividade" title="Erosividade da Chuva (Fator R)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5S5.5 10 5.5 14.5a6.5 6.5 0 0 0 13 0C18.5 10 12 2.5 12 2.5z"/><path d="M9.5 14.5a2.5 2.5 0 0 0 2.5 2.5"/></svg>
+        <span>Erosividade</span>
+      </button>
       <button data-tab="camadas" title="Camadas">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
         <span>Camadas</span>
@@ -653,6 +657,39 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
       <div class="log" id="log-ana"></div>
 
       <div id="res-analise"></div>
+    </section>
+
+    <!-- ══ ABA: EROSIVIDADE (Fator R) ═════════════════════ -->
+    <section class="painel" id="tab-erosividade">
+      <h3>Erosividade da Chuva (Fator R)</h3>
+      <p class="hint">Calcula o fator R da EUPS/USLE do imóvel a partir da chuva.
+        Por padrão a chuva vem do <b>CHIRPS</b> (satélite, via Earth Engine) sobre o
+        polígono do CAR — sem banco nem ANA. Requer o backend (⚙ Configurações).</p>
+
+      <label>Área (limite do imóvel / CAR)</label>
+      <select id="sel-ero-imovel"></select>
+
+      <label style="margin-top:10px">Equação (padrão = Lombardi Neto &amp; Moldenhauer)</label>
+      <select id="sel-ero-eq"><option value="1">Padrão — Lombardi Neto &amp; Moldenhauer (1992)</option></select>
+
+      <details style="margin-top:10px">
+        <summary style="cursor:pointer;font-size:.86em;color:var(--text-secondary)">
+          Usar médias de chuva próprias (ANA/TCC) em vez do CHIRPS</summary>
+        <p class="hint" style="margin-top:6px">Cole <b>13 números</b> (12 médias mensais
+          jan→dez e o total anual), separados por espaço, vírgula ou quebra de linha.
+          Ex.: <code>266,5 265,4 … 233,0 1674,2</code>. Deixe vazio para usar o CHIRPS.</p>
+        <textarea id="inp-ero-manual" rows="3" placeholder="jan … dez  total_anual"
+          style="width:100%;font-family:monospace;font-size:.82em"></textarea>
+      </details>
+
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn" id="btn-erosividade" style="flex:1">Calcular</button>
+        <button class="btn sec" id="btn-ero-csv" title="Exportar CSV" disabled>Exportar CSV</button>
+      </div>
+      <progress id="prog-ero" value="0" max="100" style="display:none"></progress>
+      <div class="log" id="log-ero"></div>
+
+      <div id="res-erosividade"></div>
     </section>
 
     <!-- ══ ABA: CAMADAS ═══════════════════════════════════ -->
@@ -1438,7 +1475,7 @@ function atualizarUICamadas(){
     return sorted.map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('')
       || '<option value="">— nenhuma camada vetorial —</option>';
   };
-  for(const id of ['sel-sobrep-imovel','sel-mb-camada','sel-sat-camada','sel-ana-imovel'])
+  for(const id of ['sel-sobrep-imovel','sel-mb-camada','sel-sat-camada','sel-ana-imovel','sel-ero-imovel'])
     $(id).innerHTML = opts('IMÓVEL');
   if(typeof detectarCamadasCAR === 'function') detectarCamadasCAR();
 }
@@ -3219,6 +3256,176 @@ function corScoreHex(v){
   if(v >= 50) return '#e8842c';
   return '#d7301f';
 }
+
+/* ══ EROSIVIDADE (Fator R) ══════════════════════════════════════════
+   Aba adaptada ao BondGIS: reusa seleção de imóvel, apiPost, Leaflet e
+   SVG inline (sem lib de gráfico). Chuva via CHIRPS (backend) ou manual. */
+let _eroResultado = null;
+const _fmtR = v => (v == null ? '—' : Number(v).toLocaleString('pt-BR', {maximumFractionDigits: 0}));
+const COR_CLASSE = {'baixa':'#1a9850','média':'#a6d96a','média a forte':'#fee08b','forte':'#fdae61','muito forte':'#d7301f'};
+const COR_CONF = {'alta':'#1a9850','média':'#f2c744','baixa':'#d7301f'};
+
+function _eroImovelGeo(){
+  const cam = state.registro.find(c => c.id === Number($('sel-ero-imovel').value));
+  if(!cam) throw new Error('Selecione a área (limite do imóvel).');
+  const g = unirFeatures(featuresPoligonais(cam.geojson));
+  if(!g) throw new Error('A camada selecionada não contém polígonos.');
+  return g;
+}
+function _eroParseManual(txt){
+  if(!txt.trim()) return null;
+  // Extrai números (vírgula = decimal brasileiro); aceita espaço/;/quebra como separador.
+  const toks = txt.match(/\d+(?:[.,]\d+)?/g) || [];
+  const nums = toks.map(t => parseFloat(t.replace(',', '.'))).filter(v => !isNaN(v));
+  if(nums.length < 13) throw new Error('Cole 13 números (12 meses jan→dez + total anual). Não use separador de milhar.');
+  return {meses: nums.slice(0, 12), P: nums[12]};
+}
+
+async function calcularErosividade(){
+  let body;
+  try{
+    const manual = _eroParseManual($('inp-ero-manual').value);
+    body = {equacao_id: Number($('sel-ero-eq').value) || 1};
+    if(manual){ body.aoi = {type:'Point', coordinates:[0,0]}; body.chuva_manual = manual; }
+    else { body.aoi = _eroImovelGeo(); }
+  } catch(e){ logTo('log-ero', `✖ ${e.message}`, true); return; }
+  const prog = $('prog-ero'); prog.style.display = 'block'; prog.removeAttribute('value');
+  const tok = iniciarCarga('Calculando erosividade…');
+  logTo('log-ero', body.chuva_manual ? 'Calculando com as médias informadas…'
+                                     : 'Buscando chuva (CHIRPS) e calculando…', true);
+  try{
+    const r = await apiPost('/api/erosividade', body, 180000);
+    _eroResultado = r; renderErosividade(r); $('btn-ero-csv').disabled = false;
+    logTo('log-ero', `✔ R = ${_fmtR(r.R)} ${r.unidade_R} · ${r.classe} · confiança ${r.confianca}.`);
+  } catch(e){ logTo('log-ero', `✖ ${e.message}`); }
+  finally { prog.style.display = 'none'; terminarCarga(tok); }
+}
+
+function _svgMensal(r){
+  const ord = [9,10,11,0,1,2,3,4,5,6,7,8];
+  const lab = ['Out','Nov','Dez','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set'];
+  const ei = ord.map(i => r.ei_mensal[i]);
+  const R = ei.reduce((a,b)=>a+b,0) || 1;
+  const maxv = Math.max(...ei, 500) * 1.12;
+  const W=560,H=240,ml=46,mr=44,mt=12,mb=26, pw=W-ml-mr, ph=H-mt-mb, cell=pw/12, bw=cell*0.66;
+  let bars='', acc=0; const pts=[];
+  ei.forEach((v,i)=>{
+    const x=ml+cell*i+(cell-bw)/2, h=ph*v/maxv, y=mt+ph-h, crit=v>500;
+    bars+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${crit?'#e8842c':'var(--accent)'}"><title>${lab[i]}: ${_fmtR(v)}</title></rect>`;
+    bars+=`<text x="${(x+bw/2).toFixed(1)}" y="${H-9}" font-size="9" text-anchor="middle" fill="var(--text-tertiary)">${lab[i]}</text>`;
+    acc+=v; pts.push([(ml+cell*i+cell/2).toFixed(1), (mt+ph-ph*acc/R).toFixed(1)]);
+  });
+  const y500 = (mt+ph-ph*500/maxv).toFixed(1);
+  const poly = pts.map(p=>p.join(',')).join(' ');
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:560px">
+    <line x1="${ml}" x2="${W-mr}" y1="${y500}" y2="${y500}" stroke="#d7301f" stroke-width="1" stroke-dasharray="4 3"/>
+    <text x="${W-mr+2}" y="${+y500+3}" font-size="8" fill="#d7301f">500</text>
+    ${bars}
+    <polyline points="${poly}" fill="none" stroke="#2c7fb8" stroke-width="1.6"/>
+    <text x="${ml-4}" y="${mt+8}" font-size="8" text-anchor="end" fill="var(--text-tertiary)">EI</text>
+    <text x="${W-mr+2}" y="${mt+8}" font-size="8" fill="#2c7fb8">%acum</text>
+  </svg>`;
+}
+
+function _svgSens(r){
+  const s = r.sensibilidade; if(!s.length) return '';
+  const maxv = Math.max(...s.map(x=>x.R)) * 1.05 || 1;
+  const W=560, ml=150, mr=64, rowH=26, H=s.length*rowH+8;
+  let out='';
+  s.forEach((e,i)=>{
+    const y=6+i*rowH, bw=(W-ml-mr)*e.R/maxv;
+    out+=`<text x="${ml-6}" y="${y+14}" font-size="10" text-anchor="end" fill="var(--text-secondary)">${esc(e.nome.replace(/\s*\(.*/,'').slice(0,20))}</text>`;
+    out+=`<rect x="${ml}" y="${y+3}" width="${Math.max(1,bw).toFixed(1)}" height="16" rx="3" fill="${e.escolhida?'var(--accent)':'#addd8e'}"><title>${esc(e.local)} — ${esc(e.koppen)}</title></rect>`;
+    out+=`<text x="${(ml+bw+5).toFixed(1)}" y="${y+15}" font-size="9.5" fill="var(--text-secondary)">${_fmtR(e.R)}</text>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:560px">${out}</svg>`;
+}
+
+function eroTab(nome){
+  for(const t of ['mensal','sens','metodo']){
+    $('ero-tab-'+t).style.display = t===nome ? 'block':'none';
+    $('ero-btn-'+t).classList.toggle('on', t===nome);
+  }
+}
+
+function renderErosividade(r){
+  const classeCor = COR_CLASSE[r.classe] || 'var(--text-tertiary)';
+  const confCor = COR_CONF[r.confianca] || 'var(--text-tertiary)';
+  const faixa = r.faixa_sensibilidade ? `${_fmtR(r.faixa_sensibilidade[0])} – ${_fmtR(r.faixa_sensibilidade[1])}` : '—';
+  const temRet = r.retorno && r.retorno.length;
+  const retCard = temRet ? [2,10,50].map(T=>{
+    const x = r.retorno.find(o=>o.T===T); return x ? `<div style="text-align:center"><div style="font-size:.72em;color:var(--text-tertiary)">${T} anos</div><div style="font-weight:700">${_fmtR(x.R)}</div></div>`:'';
+  }).join('') : '';
+  const retTabela = temRet ? `<table style="width:100%;font-size:.82em;border-collapse:collapse;margin-top:6px">
+      <tr style="color:var(--text-tertiary)"><td>T (anos)</td>${r.retorno.map(o=>`<td style="text-align:right">${o.T}</td>`).join('')}</tr>
+      <tr><td>R</td>${r.retorno.map(o=>`<td style="text-align:right">${_fmtR(o.R)}</td>`).join('')}</tr></table>
+      ${r.ic_media?`<div class="hint" style="margin-top:4px">IC95% da média: ${_fmtR(r.ic_media[0])} – ${_fmtR(r.ic_media[1])}${r.mokus_anos?` · mínimo de anos (Mokus): ${r.mokus_anos}`:''}</div>`:''}` : '';
+
+  const meto = r.metodologia || {};
+  const metoHtml = `<div style="font-size:.84em;line-height:1.5">
+    <div><b>Fonte da chuva:</b> ${esc(meto.fonte_chuva||'—')} ${meto.periodo?`(${esc(meto.periodo)})`:''}</div>
+    ${r.n_anos?`<div><b>Anos (série):</b> ${r.n_anos}${r.cv!=null?` · CV ${r.cv}%`:''}</div>`:''}
+    <div><b>Equação:</b> ${esc(meto.equacao||'—')}</div>
+    <div><b>Índice:</b> ${esc(meto.indice||'—')} · <b>Classes:</b> ${esc(meto.classes||'—')}</div>
+    <div><b>Regime:</b> ${esc(r.regime?r.regime.rotulo:'—')} · <b>R climatológico (B):</b> ${_fmtR(r.R_climatologico)}</div>
+    ${r.area_ha!=null?`<div><b>Área:</b> ${_fmtR(r.area_ha)} ha · <b>P média:</b> ${_fmtR(r.chuva.P_medio)} mm/ano</div>`:`<div><b>P informada:</b> ${_fmtR(r.chuva.P_medio)} mm/ano</div>`}
+    <div style="color:var(--text-tertiary);margin-top:4px">Cálculo: ${esc(meto.data_calculo||'')}</div>
+    <ul style="margin:6px 0 0;padding-left:18px;color:var(--text-secondary)">${(meto.limitacoes||[]).map(l=>`<li>${esc(l)}</li>`).join('')}</ul></div>`;
+
+  const motivos = (r.motivos_confianca||[]).map(m=>`<li>${esc(m)}</li>`).join('');
+
+  $('res-erosividade').innerHTML = `
+    <div style="margin-top:14px;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2)">
+      <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+        <span style="font-size:1.9em;font-weight:800">${_fmtR(r.R)}</span>
+        <span style="color:var(--text-secondary);font-size:.8em">${esc(r.unidade_R)}</span>
+      </div>
+      <div class="hint" style="margin-top:2px">faixa entre equações: ${faixa} · método ${esc(r.metodo_R)}</div>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <span style="padding:3px 10px;border-radius:20px;font-size:.78em;font-weight:700;color:#1a1a1a;background:${classeCor}">Classe: ${esc(r.classe)}</span>
+        <span style="padding:3px 10px;border-radius:20px;font-size:.78em;font-weight:700;color:#fff;background:${confCor}">Confiança: ${esc(r.confianca)}</span>
+      </div>
+      ${motivos?`<details style="margin-top:6px"><summary style="cursor:pointer;font-size:.78em;color:var(--text-tertiary)">por que esta confiança?</summary><ul style="margin:4px 0 0;padding-left:18px;font-size:.8em;color:var(--text-secondary)">${motivos}</ul></details>`:''}
+    </div>
+    ${temRet?`<div style="margin-top:10px;padding:10px 14px;border:1px solid var(--border);border-radius:12px">
+      <div class="hint" style="margin-bottom:6px">Período de retorno (R esperado em anos mais agressivos)</div>
+      <div style="display:flex;justify-content:space-around">${retCard}</div>
+      <details style="margin-top:6px"><summary style="cursor:pointer;font-size:.78em;color:var(--text-tertiary)">tabela completa</summary>${retTabela}</details>
+    </div>`:''}
+    <div style="margin-top:10px">
+      <div class="rot-seg" style="display:inline-flex;margin-bottom:8px">
+        <button id="ero-btn-mensal" class="on" onclick="eroTab('mensal')">Mensal</button>
+        <button id="ero-btn-sens" onclick="eroTab('sens')">Sensibilidade</button>
+        <button id="ero-btn-metodo" onclick="eroTab('metodo')">Metodologia</button>
+      </div>
+      <div id="ero-tab-mensal">${_svgMensal(r)}
+        <div class="hint">Barras = EI mensal (laranja = crítico, EI&gt;500). Azul = % acumulada. Período crítico: ${esc((r.periodo_critico.meses||[]).join(', '))} (${r.periodo_critico.pct}%).</div></div>
+      <div id="ero-tab-sens" style="display:none">${_svgSens(r)}
+        <div class="hint">R com equações alternativas do mesmo regime; a escolhida em destaque. A escolha da equação é a maior fonte de incerteza.</div></div>
+      <div id="ero-tab-metodo" style="display:none">${metoHtml}</div>
+    </div>`;
+}
+
+function exportarErosividadeCSV(){
+  const r = _eroResultado; if(!r){ return; }
+  const nl = '\r\n'; let csv = 'BondGIS — Erosividade (Fator R)'+nl;
+  csv += `R (${r.unidade_R});${r.R}`+nl;
+  csv += `Classe;${r.classe}`+nl + `Confianca;${r.confianca}`+nl;
+  csv += `Metodo;${r.metodo_R}`+nl + `Fonte chuva;${r.metodologia.fonte_chuva}`+nl;
+  csv += `Periodo;${r.metodologia.periodo}`+nl + `Equacao;${r.metodologia.equacao}`+nl;
+  if(r.area_ha!=null) csv += `Area (ha);${r.area_ha}`+nl;
+  csv += nl + 'Mes;EI mensal;%;% acumulada'+nl;
+  r.meses.forEach((m,i)=>{ csv += `${m};${r.ei_mensal[i]};${r.pct[i]};${r.pct_acumulada[i]}`+nl; });
+  if(r.retorno.length){ csv += nl+'T (anos);R'+nl; r.retorno.forEach(o=>{ csv += `${o.T};${o.R}`+nl; }); }
+  csv += nl+'Sensibilidade (equacao;local;Koppen;R)'+nl;
+  r.sensibilidade.forEach(e=>{ csv += `${e.nome};${e.local};${e.koppen};${e.R}`+nl; });
+  const blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'erosividade_fatorR.csv'; a.click(); URL.revokeObjectURL(a.href);
+}
+
+$('btn-erosividade').addEventListener('click', calcularErosividade);
+$('btn-ero-csv').addEventListener('click', exportarErosividadeCSV);
 
 /* ── Inicialização da UI ──────────────────────────────────────────── */
 document.querySelectorAll('#tabs button').forEach(btn => {

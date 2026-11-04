@@ -124,3 +124,66 @@ class AnaliseResponse(BaseModel):
     camadas_recebidas: Dict[str, bool]
     modulos: Dict[str, Any]
     geojson_divergencias: Dict[str, Any]
+
+
+# ── EROSIVIDADE (fator R da USLE) ─────────────────────────────────────────
+class ChuvaManual(BaseModel):
+    """Override manual: 12 médias mensais (jan→dez) e o total anual (mm)."""
+    meses: List[float] = Field(..., description="12 médias mensais jan→dez (mm)")
+    P: float = Field(..., gt=0, description="Total anual (mm)")
+
+
+class ErosividadeRequest(BaseModel):
+    aoi: Dict[str, Any] = Field(..., description="GeoJSON do limite do imóvel")
+    equacao_id: int = Field(1, description="Equação da biblioteca (1 = padrão)")
+    alternativas: Optional[List[int]] = Field(
+        None, description="IDs das equações de sensibilidade; padrão = pelo regime")
+    chuva_manual: Optional[ChuvaManual] = Field(
+        None, description="Se informado, usa estas médias em vez do CHIRPS")
+    ano_ini: Optional[int] = None
+    ano_fim: Optional[int] = None
+
+
+class ErosividadeResponse(BaseModel):
+    R: float
+    R_climatologico: float
+    metodo_R: str
+    classe: str
+    faixa_sensibilidade: List[float]
+    ic_media: Optional[List[float]] = None
+    mokus_anos: Optional[float] = None
+    ei_mensal: List[float]
+    pct: List[float]
+    pct_acumulada: List[float]
+    meses: List[str]
+    meses_criticos: List[str]
+    periodo_critico: Dict[str, Any]
+    serie_R_anual: List[float] = []
+    n_anos: int = 0
+    cv: Optional[float] = None
+    retorno: List[Dict[str, Any]] = []
+    sensibilidade: List[Dict[str, Any]] = []
+    spread_sensibilidade: float = 0.0
+    confianca: str
+    motivos_confianca: List[str] = []
+    regime: Dict[str, Any]
+    equacao: Dict[str, Any]
+    chuva: Dict[str, Any]
+    metodologia: Dict[str, Any]
+    area_ha: Optional[float] = None
+    centroide: Optional[Dict[str, float]] = None
+    unidade_R: str
+
+
+class EquacaoInfo(BaseModel):
+    id: int
+    nome: str
+    local: str
+    koppen: str
+    referencia: str
+    ativa: bool
+    usar_para: str
+
+
+class EquacoesResponse(BaseModel):
+    equacoes: List[EquacaoInfo] = []
