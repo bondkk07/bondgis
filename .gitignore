@@ -8,3 +8,10 @@ backend/.venv/
 backend/__pycache__/
 **/__pycache__/
 *.pyc
+
+# ── Referências do TCC (PDFs locais, não versionar — incham o repositório) ──
+# Apoiam o melhoramento do HTML e o referencial do TCC; ficam só na máquina.
+referencias/
+
+# Extração temporária do .docx da proposta (o doc.docx já é versionado).
+contract/unpacked/
