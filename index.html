@@ -662,9 +662,9 @@ progress::-moz-progress-bar{background:linear-gradient(90deg,var(--accent),#7C3A
     <!-- ══ ABA: EROSIVIDADE (Fator R) ═════════════════════ -->
     <section class="painel" id="tab-erosividade">
       <h3>Erosividade da Chuva (Fator R)</h3>
-      <p class="hint">Calcula o fator R da EUPS/USLE do imóvel a partir da chuva.
-        Por padrão a chuva vem do <b>CHIRPS</b> (satélite, via Earth Engine) sobre o
-        polígono do CAR — sem banco nem ANA. Requer o backend (⚙ Configurações).</p>
+      <p class="hint">Estima o quanto a chuva do imóvel favorece a erosão do solo
+        (o <b>fator R</b> da USLE). Por padrão a chuva vem do <b>CHIRPS</b> (satélite,
+        via Earth Engine) sobre o polígono do CAR. Requer o backend (⚙ Configurações).</p>
 
       <label>Área (limite do imóvel / CAR)</label>
       <select id="sel-ero-imovel"></select>
@@ -3262,6 +3262,9 @@ function corScoreHex(v){
    SVG inline (sem lib de gráfico). Chuva via CHIRPS (backend) ou manual. */
 let _eroResultado = null;
 const _fmtR = v => (v == null ? '—' : Number(v).toLocaleString('pt-BR', {maximumFractionDigits: 0}));
+// Número com vírgula decimal (padrão BR); data ISO → dd/mm/aaaa.
+const _fmtN = (v, casas=1) => (v == null ? '—' : Number(v).toLocaleString('pt-BR', {minimumFractionDigits: casas, maximumFractionDigits: casas}));
+const _fmtData = s => { const m = String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : (s||''); };
 const COR_CLASSE = {'fraca':'#1a9850','moderada':'#a6d96a','moderada a forte':'#fee08b','forte':'#fdae61','muito forte':'#d7301f'};
 // Classes de erosividade anual (Carvalho, 2008), em MJ·mm·ha⁻¹·h⁻¹·ano⁻¹
 const FAIXAS_CLASSE = [['fraca','R < 2.452'],['moderada','2.452 ≤ R < 4.905'],['moderada a forte','4.905 ≤ R < 7.357'],['forte','7.357 ≤ R < 9.810'],['muito forte','R ≥ 9.810']];
@@ -3271,6 +3274,17 @@ const TEXTO_CLASSE = {
   'moderada a forte':'A chuva tem potencial considerável de causar erosão; solo descoberto no período chuvoso fica exposto a perdas importantes.',
   'forte':'A chuva é muito agressiva; o solo precisa estar coberto no período chuvoso, com plantio direto e, em áreas declivosas, práticas mecânicas como terraços.',
   'muito forte':'A chuva está no topo da escala de agressividade; solo descoberto no período chuvoso tende a sofrer perdas elevadas, o que torna prioritários o plantio direto com palha, a manutenção de cobertura na entressafra e terraços em áreas declivosas.'};
+// Veredito em linguagem simples (manchete) por classe.
+const HEADLINE_CLASSE = {
+  'fraca':'Chuva pouco agressiva para o solo',
+  'moderada':'Chuva moderadamente agressiva para o solo',
+  'moderada a forte':'Chuva bastante agressiva para o solo',
+  'forte':'Chuva muito agressiva para o solo',
+  'muito forte':'Chuva extremamente agressiva para o solo'};
+const TEXTO_CONF = {
+  'alta':'O resultado é consistente.',
+  'média':'O resultado serve como estimativa; confirme com dados locais antes de decisões importantes.',
+  'baixa':'Use como uma primeira estimativa; para projetos, confirme com chuva medida na região.'};
 const COR_CONF = {'alta':'#1a9850','média':'#f2c744','baixa':'#d7301f'};
 
 function _eroImovelGeo(){
@@ -3367,18 +3381,18 @@ function renderErosividade(r){
   const retTabela = temRet ? `<table style="width:100%;font-size:.82em;border-collapse:collapse;margin-top:6px">
       <tr style="color:var(--text-tertiary)"><td>T (anos)</td>${r.retorno.map(o=>`<td style="text-align:right">${o.T}</td>`).join('')}</tr>
       <tr><td>R</td>${r.retorno.map(o=>`<td style="text-align:right">${_fmtR(o.R)}</td>`).join('')}</tr></table>
-      ${r.ic_media?`<div class="hint" style="margin-top:4px">IC95% da média: ${_fmtR(r.ic_media[0])} – ${_fmtR(r.ic_media[1])}${r.mokus_anos?` · mínimo de anos (Mokus): ${r.mokus_anos}`:''}</div>`:''}` : '';
+      ${r.ic_media?`<div class="hint" style="margin-top:4px">faixa provável da média (95% de confiança): ${_fmtR(r.ic_media[0])} – ${_fmtR(r.ic_media[1])}${r.mokus_anos?` · série mínima recomendada: ${_fmtN(r.mokus_anos,0)} anos`:''}</div>`:''}` : '';
 
   const meto = r.metodologia || {};
   const metoHtml = `<div style="font-size:.84em;line-height:1.5">
     <div><b>Fonte da chuva:</b> ${esc(meto.fonte_chuva||'—')} ${meto.periodo?`(${esc(meto.periodo)})`:''}</div>
-    ${r.n_anos?`<div><b>Anos (série):</b> ${r.n_anos}${r.cv!=null?` · CV ${r.cv}%`:''}</div>`:''}
+    ${r.n_anos?`<div><b>Anos (série):</b> ${r.n_anos}${r.cv!=null?` · variação entre anos (CV) ${_fmtN(r.cv,1)}%`:''}</div>`:''}
     <div><b>Equação:</b> ${esc(meto.equacao||'—')}</div>
     <div><b>Índice:</b> ${esc(meto.indice||'—')} · <b>Classes:</b> ${esc(meto.classes||'—')}</div>
     ${meto.periodo_retorno?`<div><b>Período de retorno:</b> ${esc(meto.periodo_retorno)}${meto.metodo_espacial?` · <b>Chuva sobre o imóvel:</b> ${meto.metodo_espacial==='centroide'?'pixel do centroide':'média ponderada no polígono'}`:''}</div>`:''}
     <div><b>Regime:</b> ${esc(r.regime?r.regime.rotulo:'—')} · <b>R climatológico (B):</b> ${_fmtR(r.R_climatologico)}</div>
     ${r.area_ha!=null?`<div><b>Área:</b> ${_fmtR(r.area_ha)} ha · <b>P média:</b> ${_fmtR(r.chuva.P_medio)} mm/ano</div>`:`<div><b>P informada:</b> ${_fmtR(r.chuva.P_medio)} mm/ano</div>`}
-    <div style="color:var(--text-tertiary);margin-top:4px">Cálculo: ${esc(meto.data_calculo||'')}</div>
+    <div style="color:var(--text-tertiary);margin-top:4px">Cálculo: ${esc(_fmtData(meto.data_calculo))}</div>
     <ul style="margin:6px 0 0;padding-left:18px;color:var(--text-secondary)">${(meto.limitacoes||[]).map(l=>`<li>${esc(l)}</li>`).join('')}</ul></div>`;
 
   const motivos = (r.motivos_confianca||[]).map(m=>`<li>${esc(m)}</li>`).join('');
@@ -3392,22 +3406,31 @@ function renderErosividade(r){
         <div class="hint" style="margin-top:3px">R em MJ·mm·ha⁻¹·h⁻¹·ano⁻¹</div>
       </div></details>`;
 
+  const headline = HEADLINE_CLASSE[r.classe] || 'Agressividade da chuva estimada';
+  const metodoPlano = (r.metodo_R && r.metodo_R.startsWith('A')) ? 'com base na série de chuva ano a ano' : 'com base nas médias de chuva';
+  const textoConf = TEXTO_CONF[r.confianca] || '';
   $('res-erosividade').innerHTML = `
     <div style="margin-top:14px;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2)">
-      <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
-        <span style="font-size:1.9em;font-weight:800">${_fmtR(r.R)}</span>
-        <span style="color:var(--text-secondary);font-size:.8em">${esc(r.unidade_R)}</span>
-      </div>
-      <div class="hint" style="margin-top:2px">faixa entre equações: ${faixa} · método ${esc(r.metodo_R)}</div>
-      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-        <span style="padding:3px 10px;border-radius:20px;font-size:.78em;font-weight:700;color:#1a1a1a;background:${classeCor}">Classe: ${esc(r.classe)}</span>
+      <div style="font-size:1.12em;font-weight:800;line-height:1.3">${esc(headline)}</div>
+      ${TEXTO_CLASSE[r.classe]?`<div style="margin-top:4px;font-size:.9em;color:var(--text-secondary);line-height:1.45">${TEXTO_CLASSE[r.classe]}</div>`:''}
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <span style="padding:3px 10px;border-radius:20px;font-size:.78em;font-weight:700;color:#1a1a1a;background:${classeCor}">Agressividade: ${esc(r.classe)}</span>
         <span style="padding:3px 10px;border-radius:20px;font-size:.78em;font-weight:700;color:#fff;background:${confCor}">Confiança: ${esc(r.confianca)}</span>
       </div>
+      ${textoConf?`<div class="hint" style="margin-top:6px">${esc(textoConf)}</div>`:''}
       ${classeExpl}
       ${motivos?`<details style="margin-top:6px"><summary style="cursor:pointer;font-size:.78em;color:var(--text-tertiary)">por que esta confiança?</summary><ul style="margin:4px 0 0;padding-left:18px;font-size:.8em;color:var(--text-secondary)">${motivos}</ul></details>`:''}
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border-subtle)">
+        <div class="hint" style="margin-bottom:2px">Fator R — índice técnico de erosividade (quanto maior, mais a chuva favorece a erosão)</div>
+        <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+          <span style="font-size:1.6em;font-weight:800">${_fmtR(r.R)}</span>
+          <span style="color:var(--text-secondary);font-size:.78em">${esc(r.unidade_R)}</span>
+        </div>
+        <div class="hint" style="margin-top:2px">Pode variar de ${faixa} conforme a equação usada · cálculo ${esc(metodoPlano)}</div>
+      </div>
     </div>
     ${temRet?`<div style="margin-top:10px;padding:10px 14px;border:1px solid var(--border);border-radius:12px">
-      <div class="hint" style="margin-bottom:6px">Período de retorno: fator R (MJ·mm·ha⁻¹·h⁻¹·ano⁻¹) igualado ou superado, em média, 1 vez a cada T anos</div>
+      <div class="hint" style="margin-bottom:6px">Em anos mais chuvosos a erosividade é maior. Abaixo, o fator R esperado, em média, 1 vez a cada período:</div>
       <div style="display:flex;justify-content:space-around">${retCard}</div>
       <details style="margin-top:6px"><summary style="cursor:pointer;font-size:.78em;color:var(--text-tertiary)">tabela completa</summary>${retTabela}</details>
     </div>`:''}
@@ -3418,28 +3441,37 @@ function renderErosividade(r){
         <button id="ero-btn-metodo" onclick="eroTab('metodo')">Metodologia</button>
       </div>
       <div id="ero-tab-mensal">${_svgMensal(r)}
-        <div class="hint">Barras = EI mensal (laranja = crítico, EI&gt;500). Azul = % acumulada. Período crítico: ${esc((r.periodo_critico.meses||[]).join(', '))} (${r.periodo_critico.pct}%).${r.cs_out_abr!=null?` ${String(r.cs_out_abr).replace('.',',')}% da erosividade ocorre entre outubro e abril.`:''}${r.tendencia?` Tendência (Mann-Kendall): ${r.tendencia.significativa?'significativa':'não significativa'}, Sen = ${String(r.tendencia.sen_por_ano).replace('.',',')} por ano (p = ${String(r.tendencia.p_mann_kendall).replace('.',',')}).`:''}<br>Estimativa em grade de ~5 km (CHIRPS); não substitui a medição local.</div></div>
+        <div class="hint">As barras mostram em que meses a chuva é mais erosiva (laranja = meses mais críticos). A linha azul é o total acumulado ao longo do ano. Período mais crítico: ${esc((r.periodo_critico.meses||[]).join(', '))} (${_fmtN(r.periodo_critico.pct,1)}% da erosividade do ano).${r.cs_out_abr!=null?` ${_fmtN(r.cs_out_abr,0)}% da erosividade ocorre entre outubro e abril.`:''}${r.tendencia?(r.tendencia.significativa?` Há tendência de ${r.tendencia.sen_por_ano>0?'aumento':'queda'} da erosividade ao longo dos anos.`:` Sem tendência clara de aumento ou queda ao longo dos anos.`):''}<br>Estimativa em grade de ~5 km (satélite CHIRPS); não substitui a medição feita no local.</div></div>
       <div id="ero-tab-sens" style="display:none">${_svgSens(r)}
-        <div class="hint">R com equações alternativas do mesmo regime; a escolhida em destaque. A escolha da equação é a maior fonte de incerteza.</div></div>
+        <div class="hint">O mesmo imóvel calculado por diferentes equações científicas (a usada fica em destaque). Elas dão resultados diferentes — por isso a escolha da equação é a maior fonte de incerteza do fator R.</div></div>
       <div id="ero-tab-metodo" style="display:none">${metoHtml}</div>
     </div>`;
 }
 
 function exportarErosividadeCSV(){
   const r = _eroResultado; if(!r){ return; }
-  const nl = '\r\n'; let csv = 'BondGIS — Erosividade (Fator R)'+nl;
-  csv += `R (${r.unidade_R});${r.R}`+nl;
-  csv += `Classe;${r.classe}`+nl + `Confianca;${r.confianca}`+nl;
-  csv += `Metodo;${r.metodo_R}`+nl + `Fonte chuva;${r.metodologia.fonte_chuva}`+nl;
-  csv += `Periodo;${r.metodologia.periodo}`+nl + `Equacao;${r.metodologia.equacao}`+nl;
-  if(r.cs_out_abr!=null) csv += `CS out-abr (%);${r.cs_out_abr}`+nl;
-  if(r.tendencia) csv += `Sen (por ano);${r.tendencia.sen_por_ano}`+nl + `p Mann-Kendall;${r.tendencia.p_mann_kendall}`+nl;
-  if(r.area_ha!=null) csv += `Area (ha);${r.area_ha}`+nl;
-  csv += nl + 'Mes;EI mensal;%;% acumulada'+nl;
-  r.meses.forEach((m,i)=>{ csv += `${m};${r.ei_mensal[i]};${r.pct[i]};${r.pct_acumulada[i]}`+nl; });
-  if(r.retorno.length){ csv += nl+'T (anos);R'+nl; r.retorno.forEach(o=>{ csv += `${o.T};${o.R}`+nl; }); }
-  csv += nl+'Sensibilidade (equacao;local;Koppen;R)'+nl;
-  r.sensibilidade.forEach(e=>{ csv += `${e.nome};${e.local};${e.koppen};${e.R}`+nl; });
+  const nl = '\r\n';
+  const d = v => (v == null ? '' : String(v).replace('.', ','));   // decimal pt-BR (vírgula)
+  const metodoPlano = (r.metodo_R && r.metodo_R.startsWith('A')) ? 'série de chuva ano a ano' : 'médias de chuva';
+  let csv = 'BondGIS — Erosividade da chuva (Fator R)'+nl;
+  csv += `Resumo;${HEADLINE_CLASSE[r.classe]||''}`+nl;
+  csv += `Agressividade da chuva;${r.classe}`+nl;
+  csv += `Confiança do resultado;${r.confianca}`+nl;
+  csv += `Fator R (${r.unidade_R});${d(r.R)}`+nl;
+  csv += `Fator R — pode variar de;${d(r.faixa_sensibilidade[0])} a ${d(r.faixa_sensibilidade[1])} (conforme a equação)`+nl;
+  csv += `Forma de cálculo;${metodoPlano}`+nl;
+  csv += `Fonte da chuva;${r.metodologia.fonte_chuva}`+nl;
+  csv += `Período;${r.metodologia.periodo}`+nl;
+  csv += `Equação;${r.metodologia.equacao}`+nl;
+  if(r.cs_out_abr!=null) csv += `Erosividade concentrada de out. a abr. (%);${d(r.cs_out_abr)}`+nl;
+  if(r.tendencia) csv += `Tendência ao longo dos anos;${r.tendencia.significativa?(r.tendencia.sen_por_ano>0?'aumento':'queda'):'sem tendência clara'}`+nl;
+  if(r.area_ha!=null) csv += `Área (ha);${d(r.area_ha)}`+nl;
+  csv += `Data do cálculo;${_fmtData(r.metodologia.data_calculo)}`+nl;
+  csv += nl + 'Mês;Erosividade do mês;% do ano;% acumulada'+nl;
+  r.meses.forEach((m,i)=>{ csv += `${m};${d(r.ei_mensal[i])};${d(r.pct[i])};${d(r.pct_acumulada[i])}`+nl; });
+  if(r.retorno.length){ csv += nl+'1 vez a cada (anos);Fator R esperado'+nl; r.retorno.forEach(o=>{ csv += `${o.T};${d(o.R)}`+nl; }); }
+  csv += nl+'Comparação entre equações;Local de origem;Clima (Köppen);Fator R'+nl;
+  r.sensibilidade.forEach(e=>{ csv += `${e.nome};${e.local};${e.koppen};${d(e.R)}`+nl; });
   const blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'});
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
   a.download = 'erosividade_fatorR.csv'; a.click(); URL.revokeObjectURL(a.href);
