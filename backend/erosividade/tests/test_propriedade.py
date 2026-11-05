@@ -88,6 +88,23 @@ def test_artigo_weibull_mk_sen_cs():
     assert fr.classe(2000) == "fraca" and fr.classe(9900) == "muito forte"
 
 
+def test_sensibilidade_mesmo_metodo_do_R_principal():
+    """A linha da equação escolhida na sensibilidade deve repetir o R principal."""
+    import random
+    from erosividade import propriedade
+    random.seed(3)
+    anos = [{"ano": 1990 + i, "meses": [max(0.0, random.gauss(m, m * 0.3)) for m in
+             (300, 290, 280, 180, 80, 20, 10, 30, 90, 180, 230, 290)]} for i in range(30)]
+    for a in anos:
+        a["P"] = sum(a["meses"])
+    meses = [sum(a["meses"][k] for a in anos) / 30 for k in range(12)]
+    chuva = {"meses_medios": meses, "P_medio": sum(meses), "anos_completos": anos, "fonte": "CHIRPS"}
+    r = propriedade.calcular({"type": "Point", "coordinates": [-62, -11]}, chuva, 1)
+    esc = [s for s in r["sensibilidade"] if s["escolhida"]][0]
+    assert abs(esc["R"] - r["R"]) < 0.2
+    assert esc["metodo"].startswith("A")
+
+
 def run_all():
     testes = [v for k, v in sorted(globals().items())
               if k.startswith("test_") and callable(v)]

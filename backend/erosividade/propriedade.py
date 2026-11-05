@@ -149,11 +149,15 @@ def calcular(aoi_geojson: Dict[str, Any], chuva: Dict[str, Any],
         e = eqs.POR_ID.get(aid)
         if not e:
             continue
-        r = fr.variante_B(meses, P, e)
+        # Mesmo método do R principal (A, ano a ano, quando há série), para que a
+        # linha da equação escolhida coincida com o R exibido.
+        rA = fr.variante_A(completos, e) if completos else {"R": None}
+        r = rA if rA.get("R") else fr.variante_B(meses, P, e)
         sensibilidade.append({
             "id": aid, "nome": e.nome, "local": e.local, "koppen": e.koppen,
             "referencia": e.referencia, "R": round(r["R"], 1),
             "escolhida": aid == equacao_id,
+            "metodo": "A (ano a ano)" if rA.get("R") else "B (climatológica)",
         })
     Rs = [s["R"] for s in sensibilidade] or [R_oficial]
     media_s = sum(Rs) / len(Rs)

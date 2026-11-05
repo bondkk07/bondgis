@@ -3269,18 +3269,18 @@ const COR_CLASSE = {'fraca':'#1a9850','moderada':'#a6d96a','moderada a forte':'#
 // Classes de erosividade anual (Carvalho, 2008), em MJ·mm·ha⁻¹·h⁻¹·ano⁻¹
 const FAIXAS_CLASSE = [['fraca','R < 2.452'],['moderada','2.452 ≤ R < 4.905'],['moderada a forte','4.905 ≤ R < 7.357'],['forte','7.357 ≤ R < 9.810'],['muito forte','R ≥ 9.810']];
 const TEXTO_CLASSE = {
-  'fraca':'A chuva tem baixo potencial de causar erosão.',
-  'moderada':'A chuva tem potencial moderado de causar erosão; manter o solo coberto e o plantio em nível já reduz bastante as perdas.',
-  'moderada a forte':'A chuva tem potencial considerável de causar erosão; solo descoberto no período chuvoso fica exposto a perdas importantes.',
-  'forte':'A chuva é muito agressiva; o solo precisa estar coberto no período chuvoso, com plantio direto e, em áreas declivosas, práticas mecânicas como terraços.',
-  'muito forte':'A chuva está no topo da escala de agressividade; solo descoberto no período chuvoso tende a sofrer perdas elevadas, o que torna prioritários o plantio direto com palha, a manutenção de cobertura na entressafra e terraços em áreas declivosas.'};
-// Veredito em linguagem simples (manchete) por classe.
+  'fraca':'As chuvas têm baixa energia de impacto e o risco de erosão hídrica é pequeno. Manter cobertura vegetal ou palhada sobre o solo costuma ser suficiente para controlar as perdas.',
+  'moderada':'As chuvas têm energia suficiente para desagregar o solo exposto. Manter o solo coberto e fazer o plantio em nível (linhas acompanhando as curvas de nível do terreno) controla a maior parte das perdas.',
+  'moderada a forte':'As chuvas mais intensas desagregam e arrastam o solo descoberto, principalmente em áreas declivosas. Recomenda-se cobertura permanente do solo, plantio em nível e atenção aos pontos onde a enxurrada se concentra.',
+  'forte':'As chuvas têm alta energia de impacto e geram enxurrada com frequência. No período chuvoso o solo deve permanecer coberto, de preferência em plantio direto (semeadura sobre a palhada, sem revolver o solo), e em áreas declivosas são necessárias práticas mecânicas, como terraços.',
+  'muito forte':'As chuvas estão entre as de maior energia de impacto, e o solo descoberto no período chuvoso fica sujeito a perdas elevadas por erosão laminar (remoção de camadas finas da superfície) e em sulcos (pequenos canais abertos pela enxurrada). São prioritários o plantio direto com palhada abundante, a cobertura do solo na entressafra e terraços dimensionados para as chuvas mais intensas.'};
+// Título por classe (linguagem técnica acessível).
 const HEADLINE_CLASSE = {
-  'fraca':'Chuva pouco agressiva para o solo',
-  'moderada':'Chuva moderadamente agressiva para o solo',
-  'moderada a forte':'Chuva bastante agressiva para o solo',
-  'forte':'Chuva muito agressiva para o solo',
-  'muito forte':'Chuva extremamente agressiva para o solo'};
+  'fraca':'Baixo potencial erosivo da chuva',
+  'moderada':'Potencial erosivo moderado',
+  'moderada a forte':'Potencial erosivo moderado a alto',
+  'forte':'Alto potencial erosivo',
+  'muito forte':'Potencial erosivo muito alto'};
 const TEXTO_CONF = {
   'alta':'O resultado é consistente.',
   'média':'O resultado serve como estimativa; confirme com dados locais antes de decisões importantes.',
@@ -3393,7 +3393,10 @@ function renderErosividade(r){
     <div><b>Regime:</b> ${esc(r.regime?r.regime.rotulo:'—')} · <b>R climatológico (B):</b> ${_fmtR(r.R_climatologico)}</div>
     ${r.area_ha!=null?`<div><b>Área:</b> ${_fmtR(r.area_ha)} ha · <b>P média:</b> ${_fmtR(r.chuva.P_medio)} mm/ano</div>`:`<div><b>P informada:</b> ${_fmtR(r.chuva.P_medio)} mm/ano</div>`}
     <div style="color:var(--text-tertiary);margin-top:4px">Cálculo: ${esc(_fmtData(meto.data_calculo))}</div>
-    <ul style="margin:6px 0 0;padding-left:18px;color:var(--text-secondary)">${(meto.limitacoes||[]).map(l=>`<li>${esc(l)}</li>`).join('')}</ul></div>`;
+    <ul style="margin:6px 0 0;padding-left:18px;color:var(--text-secondary)">${(meto.limitacoes||[]).map(l=>`<li>${esc(l)}</li>`).join('')}</ul>
+    <div style="margin-top:8px;padding:8px 10px;border-left:3px solid var(--accent);background:var(--surface-2);border-radius:6px;color:var(--text-secondary)">
+      <b style="color:var(--text)">Por que não o EI30?</b> O cálculo de referência do fator R, o EI30 (Wischmeier &amp; Smith, 1978), exige pluviógrafo, aparelho que registra a chuva ao longo do tempo e permite medir sua intensidade. Esses aparelhos são escassos no Brasil: há 13.444 estações pluviométricas em operação, mas apenas 915 com pluviógrafo, concentradas no Sudeste, no Sul e no litoral do Nordeste. Em Rondônia são 135 estações pluviométricas e apenas 3 com pluviógrafo (ANA, inventário de estações do SNIRH, consulta em 05/11/2026). Por isso, análises de erosividade de alta precisão raramente são possíveis em escala de propriedade, e o módulo estima o fator R pelo coeficiente de chuva de Fournier, a partir da chuva mensal, alternativa consagrada para locais sem pluviógrafo.
+    </div></div>`;
 
   const motivos = (r.motivos_confianca||[]).map(m=>`<li>${esc(m)}</li>`).join('');
   const classeLinhas = FAIXAS_CLASSE.map(([c,f])=>{const at=c===r.classe;
@@ -3406,7 +3409,7 @@ function renderErosividade(r){
         <div class="hint" style="margin-top:3px">R em MJ·mm·ha⁻¹·h⁻¹·ano⁻¹</div>
       </div></details>`;
 
-  const headline = HEADLINE_CLASSE[r.classe] || 'Agressividade da chuva estimada';
+  const headline = HEADLINE_CLASSE[r.classe] || 'Erosividade da chuva estimada';
   const metodoPlano = (r.metodo_R && r.metodo_R.startsWith('A')) ? 'com base na série de chuva ano a ano' : 'com base nas médias de chuva';
   const textoConf = TEXTO_CONF[r.confianca] || '';
   $('res-erosividade').innerHTML = `
@@ -3414,7 +3417,7 @@ function renderErosividade(r){
       <div style="font-size:1.12em;font-weight:800;line-height:1.3">${esc(headline)}</div>
       ${TEXTO_CLASSE[r.classe]?`<div style="margin-top:4px;font-size:.9em;color:var(--text-secondary);line-height:1.45">${TEXTO_CLASSE[r.classe]}</div>`:''}
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-        <span style="padding:3px 10px;border-radius:20px;font-size:.78em;font-weight:700;color:#1a1a1a;background:${classeCor}">Agressividade: ${esc(r.classe)}</span>
+        <span style="padding:3px 10px;border-radius:20px;font-size:.78em;font-weight:700;color:#1a1a1a;background:${classeCor}">Erosividade: ${esc(r.classe)}</span>
         <span style="padding:3px 10px;border-radius:20px;font-size:.78em;font-weight:700;color:#fff;background:${confCor}">Confiança: ${esc(r.confianca)}</span>
       </div>
       ${textoConf?`<div class="hint" style="margin-top:6px">${esc(textoConf)}</div>`:''}
@@ -3443,7 +3446,7 @@ function renderErosividade(r){
       <div id="ero-tab-mensal">${_svgMensal(r)}
         <div class="hint">As barras mostram em que meses a chuva é mais erosiva (laranja = meses mais críticos). A linha azul é o total acumulado ao longo do ano. Período mais crítico: ${esc((r.periodo_critico.meses||[]).join(', '))} (${_fmtN(r.periodo_critico.pct,1)}% da erosividade do ano).${r.cs_out_abr!=null?` ${_fmtN(r.cs_out_abr,0)}% da erosividade ocorre entre outubro e abril.`:''}${r.tendencia?(r.tendencia.significativa?` Há tendência de ${r.tendencia.sen_por_ano>0?'aumento':'queda'} da erosividade ao longo dos anos.`:` Sem tendência clara de aumento ou queda ao longo dos anos.`):''}<br>Estimativa em grade de ~5 km (satélite CHIRPS); não substitui a medição feita no local.</div></div>
       <div id="ero-tab-sens" style="display:none">${_svgSens(r)}
-        <div class="hint">O mesmo imóvel calculado por diferentes equações científicas (a usada fica em destaque). Elas dão resultados diferentes — por isso a escolha da equação é a maior fonte de incerteza do fator R.</div></div>
+        <div class="hint">O mesmo imóvel calculado por diferentes equações científicas (a usada fica em destaque), pelo mesmo método do fator R principal${(r.sensibilidade[0]&&r.sensibilidade[0].metodo&&r.sensibilidade[0].metodo.startsWith('A'))?' (R de cada ano e depois a média)':''}. Elas dão resultados diferentes — por isso a escolha da equação é a maior fonte de incerteza do fator R.</div></div>
       <div id="ero-tab-metodo" style="display:none">${metoHtml}</div>
     </div>`;
 }
@@ -3455,8 +3458,9 @@ function exportarErosividadeCSV(){
   const metodoPlano = (r.metodo_R && r.metodo_R.startsWith('A')) ? 'série de chuva ano a ano' : 'médias de chuva';
   let csv = 'BondGIS — Erosividade da chuva (Fator R)'+nl;
   csv += `Resumo;${HEADLINE_CLASSE[r.classe]||''}`+nl;
-  csv += `Agressividade da chuva;${r.classe}`+nl;
+  csv += `Classe de erosividade (Carvalho, 2008);${r.classe}`+nl;
   csv += `Confiança do resultado;${r.confianca}`+nl;
+  if((r.motivos_confianca||[]).length) csv += `Motivos da confiança;${r.motivos_confianca.map(m=>m.replace(/;/g,',')).join(' | ')}`+nl;
   csv += `Fator R (${r.unidade_R});${d(r.R)}`+nl;
   csv += `Fator R — pode variar de;${d(r.faixa_sensibilidade[0])} a ${d(r.faixa_sensibilidade[1])} (conforme a equação)`+nl;
   csv += `Forma de cálculo;${metodoPlano}`+nl;
@@ -3467,11 +3471,14 @@ function exportarErosividadeCSV(){
   if(r.tendencia) csv += `Tendência ao longo dos anos;${r.tendencia.significativa?(r.tendencia.sen_por_ano>0?'aumento':'queda'):'sem tendência clara'}`+nl;
   if(r.area_ha!=null) csv += `Área (ha);${d(r.area_ha)}`+nl;
   csv += `Data do cálculo;${_fmtData(r.metodologia.data_calculo)}`+nl;
-  csv += nl + 'Mês;Erosividade do mês;% do ano;% acumulada'+nl;
-  r.meses.forEach((m,i)=>{ csv += `${m};${d(r.ei_mensal[i])};${d(r.pct[i])};${d(r.pct_acumulada[i])}`+nl; });
-  if(r.retorno.length){ csv += nl+'1 vez a cada (anos);Fator R esperado'+nl; r.retorno.forEach(o=>{ csv += `${o.T};${d(o.R)}`+nl; }); }
-  csv += nl+'Comparação entre equações;Local de origem;Clima (Köppen);Fator R'+nl;
-  r.sensibilidade.forEach(e=>{ csv += `${e.nome};${e.local};${e.koppen};${d(e.R)}`+nl; });
+  csv += nl + 'Mês (ano hidrológico: out. a set.);Erosividade do mês;% do ano;% acumulada desde outubro'+nl;
+  const _ordAH = [9,10,11,0,1,2,3,4,5,6,7,8];
+  const _totAH = _ordAH.reduce((t,i)=>t+(r.ei_mensal[i]||0),0) || 1;
+  let _acAH = 0;
+  _ordAH.forEach(i=>{ _acAH += r.ei_mensal[i]||0; csv += `${r.meses[i]};${d(r.ei_mensal[i])};${d(r.pct[i])};${d(Math.round(1000*_acAH/_totAH)/10)}`+nl; });
+  if(r.retorno.length){ csv += nl+'Período de retorno: Weibull empírico, P = m/(N+1), T = 1/P (valor igualado ou superado, em média, 1 vez a cada T anos)'+nl+'1 vez a cada (anos);Fator R esperado'+nl; r.retorno.forEach(o=>{ csv += `${o.T};${d(o.R)}`+nl; }); }
+  csv += nl+'Comparação entre equações;Local de origem;Clima (Köppen);Fator R;Método'+nl;
+  r.sensibilidade.forEach(e=>{ csv += `${e.nome};${e.local};${e.koppen};${d(e.R)};${e.metodo||''}`+nl; });
   const blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'});
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
   a.download = 'erosividade_fatorR.csv'; a.click(); URL.revokeObjectURL(a.href);
