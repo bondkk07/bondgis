@@ -3263,6 +3263,14 @@ function corScoreHex(v){
 let _eroResultado = null;
 const _fmtR = v => (v == null ? '—' : Number(v).toLocaleString('pt-BR', {maximumFractionDigits: 0}));
 const COR_CLASSE = {'fraca':'#1a9850','moderada':'#a6d96a','moderada a forte':'#fee08b','forte':'#fdae61','muito forte':'#d7301f'};
+// Classes de erosividade anual (Carvalho, 2008), em MJ·mm·ha⁻¹·h⁻¹·ano⁻¹
+const FAIXAS_CLASSE = [['fraca','R < 2.452'],['moderada','2.452 ≤ R < 4.905'],['moderada a forte','4.905 ≤ R < 7.357'],['forte','7.357 ≤ R < 9.810'],['muito forte','R ≥ 9.810']];
+const TEXTO_CLASSE = {
+  'fraca':'A chuva tem baixo potencial de causar erosão.',
+  'moderada':'A chuva tem potencial moderado de causar erosão; manter o solo coberto e o plantio em nível já reduz bastante as perdas.',
+  'moderada a forte':'A chuva tem potencial considerável de causar erosão; solo descoberto no período chuvoso fica exposto a perdas importantes.',
+  'forte':'A chuva é muito agressiva; o solo precisa estar coberto no período chuvoso, com plantio direto e, em áreas declivosas, práticas mecânicas como terraços.',
+  'muito forte':'A chuva está no topo da escala de agressividade; solo descoberto no período chuvoso tende a sofrer perdas elevadas, o que torna prioritários o plantio direto com palha, a manutenção de cobertura na entressafra e terraços em áreas declivosas.'};
 const COR_CONF = {'alta':'#1a9850','média':'#f2c744','baixa':'#d7301f'};
 
 function _eroImovelGeo(){
@@ -3354,7 +3362,7 @@ function renderErosividade(r){
   const faixa = r.faixa_sensibilidade ? `${_fmtR(r.faixa_sensibilidade[0])} – ${_fmtR(r.faixa_sensibilidade[1])}` : '—';
   const temRet = r.retorno && r.retorno.length;
   const retCard = temRet ? [2,5,10].map(T=>{
-    const x = r.retorno.find(o=>o.T===T); return x ? `<div style="text-align:center"><div style="font-size:.72em;color:var(--text-tertiary)">${T} anos</div><div style="font-weight:700">${_fmtR(x.R)}</div></div>`:'';
+    const x = r.retorno.find(o=>o.T===T); return x ? `<div style="text-align:center"><div style="font-size:.72em;color:var(--text-tertiary)">1 vez a cada ${T} anos</div><div style="font-weight:700">${_fmtR(x.R)}</div></div>`:'';
   }).join('') : '';
   const retTabela = temRet ? `<table style="width:100%;font-size:.82em;border-collapse:collapse;margin-top:6px">
       <tr style="color:var(--text-tertiary)"><td>T (anos)</td>${r.retorno.map(o=>`<td style="text-align:right">${o.T}</td>`).join('')}</tr>
@@ -3374,6 +3382,15 @@ function renderErosividade(r){
     <ul style="margin:6px 0 0;padding-left:18px;color:var(--text-secondary)">${(meto.limitacoes||[]).map(l=>`<li>${esc(l)}</li>`).join('')}</ul></div>`;
 
   const motivos = (r.motivos_confianca||[]).map(m=>`<li>${esc(m)}</li>`).join('');
+  const classeLinhas = FAIXAS_CLASSE.map(([c,f])=>{const at=c===r.classe;
+    return `<tr style="${at?'font-weight:700;color:var(--text)':''}"><td style="padding:1px 6px 1px 0"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${COR_CLASSE[c]};margin-right:5px"></span>${c.charAt(0).toUpperCase()+c.slice(1)}${at?' ◀':''}</td><td style="text-align:right">${f}</td></tr>`;}).join('');
+  const classeExpl = `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:.78em;color:var(--text-tertiary)">o que significa esta classe?</summary>
+      <div style="margin:4px 0 0;font-size:.8em;color:var(--text-secondary);line-height:1.45">
+        <div>A classe indica o potencial da chuva deste local de causar erosão do solo (Carvalho, 2008). Considera só a chuva, não o tipo de solo, a declividade nem a cobertura.</div>
+        ${TEXTO_CLASSE[r.classe]?`<div style="margin-top:4px">${TEXTO_CLASSE[r.classe]}</div>`:''}
+        <table style="margin-top:6px;border-collapse:collapse;font-size:.95em">${classeLinhas}</table>
+        <div class="hint" style="margin-top:3px">R em MJ·mm·ha⁻¹·h⁻¹·ano⁻¹</div>
+      </div></details>`;
 
   $('res-erosividade').innerHTML = `
     <div style="margin-top:14px;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2)">
@@ -3386,10 +3403,11 @@ function renderErosividade(r){
         <span style="padding:3px 10px;border-radius:20px;font-size:.78em;font-weight:700;color:#1a1a1a;background:${classeCor}">Classe: ${esc(r.classe)}</span>
         <span style="padding:3px 10px;border-radius:20px;font-size:.78em;font-weight:700;color:#fff;background:${confCor}">Confiança: ${esc(r.confianca)}</span>
       </div>
+      ${classeExpl}
       ${motivos?`<details style="margin-top:6px"><summary style="cursor:pointer;font-size:.78em;color:var(--text-tertiary)">por que esta confiança?</summary><ul style="margin:4px 0 0;padding-left:18px;font-size:.8em;color:var(--text-secondary)">${motivos}</ul></details>`:''}
     </div>
     ${temRet?`<div style="margin-top:10px;padding:10px 14px;border:1px solid var(--border);border-radius:12px">
-      <div class="hint" style="margin-bottom:6px">Período de retorno (R esperado em anos mais agressivos)</div>
+      <div class="hint" style="margin-bottom:6px">Período de retorno: fator R (MJ·mm·ha⁻¹·h⁻¹·ano⁻¹) igualado ou superado, em média, 1 vez a cada T anos</div>
       <div style="display:flex;justify-content:space-around">${retCard}</div>
       <details style="margin-top:6px"><summary style="cursor:pointer;font-size:.78em;color:var(--text-tertiary)">tabela completa</summary>${retTabela}</details>
     </div>`:''}
