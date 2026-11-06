@@ -34,25 +34,26 @@ CLASSES: Dict[int, Tuple[str, str]] = {
     3: ("Solo Exposto", "#a6611a"),
     4: ("Agricultura", "#fdae61"),
     5: ("Pastagem", "#addd8e"),
-    6: ("Vegetação Secundária", "#78c679"),
-    7: ("Floresta", "#006837"),
-    8: ("Área Queimada", "#7f0000"),
-    9: ("Infraestrutura", "#969696"),
+    6: ("Vegetação Nativa", "#006837"),
+    7: ("Infraestrutura", "#969696"),
 }
 CLASS_PALETTE = [CLASSES[i][1] for i in sorted(CLASSES)]
 
 # Critério espectral de cada classe (exibido na legenda — transparência total
 # de por que um pixel cai em cada classe). Vírgula decimal para leitura.
+# Revisão 2 (orientador): Vegetação Secundária e Floresta foram reunidas em
+# "Vegetação Nativa" (confundiam-se entre si na validação) e a classe Área
+# Queimada foi removida (a regra por NBR captava palhada/solo de entressafra,
+# não cicatriz de fogo). A numeração dos critérios segue a ORDEM REAL de
+# avaliação em classify().
 CLASS_CRITERIOS: Dict[int, str] = {
     1: "NDWI > 0,20",
     2: "NDWI > 0 · NDMI > 0,30 · NDVI < 0,60",
     3: "BSI > 0,10 · NDVI < 0,25",
     4: "NDVI > 0,40 · NDRE > 0,28  (clorofila alta = cultura)",
-    5: "NDVI > 0,20 e não classificado como cultura  (gramínea/pasto, NDRE menor)",
-    6: "NDVI 0,55–0,70 · NDMI > 0,15",
-    7: "NDVI > 0,70 · NDMI > 0,25",
-    8: "NBR < 0,05 · NDVI < 0,35",
-    9: "NDVI < 0,20 · NDMI < 0 · BSI > 0",
+    5: "NDVI > 0,20 (demais áreas vegetadas; gramínea/pasto)",
+    6: "NDVI > 0,55 · NDMI > 0,15  (floresta e vegetação secundária)",
+    7: "NDVI < 0,20 · NDMI < 0 · BSI > 0",
 }
 
 
@@ -144,19 +145,26 @@ def add_indices(img: ee.Image) -> ee.Image:
 # ══════════════════════════════════════════════════════════════════════════
 def classify(img: ee.Image) -> ee.Image:
     """Classificação por limiares de índices espectrais (banda inteira 'class',
-    1–9). A ordem das regras vai da mais específica para a mais genérica; os
-    critérios de cada classe estão em CLASS_CRITERIOS (expostos na legenda).
+    1–7). As regras são avaliadas NESTA ordem, da mais específica para a mais
+    genérica, e cada pixel recebe a primeira classe cuja condição satisfaz
+    (prioridade por ordem); o pixel que não atende a nenhuma regra fica sem
+    classe (mascarado). Os critérios estão em CLASS_CRITERIOS (expostos na
+    legenda) e numerados nesta mesma ordem.
 
-    Continua sendo triagem preliminar (cena única, limiares não calibrados
-    regionalmente). Melhoria principal desta revisão: usar o NDRE (clorofila
-    no red-edge) para separar Agricultura — dossel vigoroso com clorofila alta —
-    de Pastagem — gramínea, com menor densidade de clorofila —, que antes se
-    confundiam por usarem só NDVI/BSI."""
+    Continua sendo triagem preliminar (composição mediana do período, limiares
+    não calibrados regionalmente). Usa o NDRE (clorofila no red-edge) para
+    separar Agricultura — dossel vigoroso com clorofila alta — de Pastagem —
+    gramínea, com menor densidade de clorofila.
+
+    Revisão 2 (orientador): Floresta e Vegetação Secundária foram reunidas em
+    Vegetação Nativa (classe 6), pois se confundiam entre si na validação; a
+    classe Área Queimada foi removida, porque a regra por NBR captava palhada e
+    solo de entressafra (não cicatriz de fogo) — esses pixels passam agora a
+    Solo Exposto, Infraestrutura ou Pastagem, conforme os índices."""
     ndvi = img.select("NDVI")
     ndre = img.select("NDRE")
     ndwi = img.select("NDWI")
     ndmi = img.select("NDMI")
-    nbr = img.select("NBR")
     bsi = img.select("BSI")
 
     # Começa como 0 (não classificado) e preenche por where(), na ordem.
@@ -166,15 +174,11 @@ def classify(img: ee.Image) -> ee.Image:
     c = c.where(ndwi.gt(0.20), 1)
     # 2 Área Úmida — umidade/alagado sem vegetação densa
     c = c.where(c.eq(0).And(ndwi.gt(0.0)).And(ndmi.gt(0.30)).And(ndvi.lt(0.60)), 2)
-    # 8 Área Queimada — assinatura de queima (NBR muito baixo), fora de água
-    c = c.where(c.eq(0).And(nbr.lt(0.05)).And(ndvi.lt(0.35)), 8)
-    # 9 Infraestrutura — superfície seca/impermeável, sem vegetação
-    c = c.where(c.eq(0).And(ndvi.lt(0.20)).And(ndmi.lt(0.0)).And(bsi.gt(0.0)), 9)
+    # 7 Infraestrutura — superfície seca/impermeável, sem vegetação
+    c = c.where(c.eq(0).And(ndvi.lt(0.20)).And(ndmi.lt(0.0)).And(bsi.gt(0.0)), 7)
     # 3 Solo Exposto — solo nu (BSI alto, NDVI baixo)
     c = c.where(c.eq(0).And(bsi.gt(0.10)).And(ndvi.lt(0.25)), 3)
-    # 7 Floresta — dossel denso e úmido (NDVI muito alto, NDMI alto)
-    c = c.where(c.eq(0).And(ndvi.gt(0.70)).And(ndmi.gt(0.25)), 7)
-    # 6 Vegetação Secundária — porte intermediário, boa umidade
+    # 6 Vegetação Nativa — dossel florestal e capoeira (NDVI alto, boa umidade)
     c = c.where(c.eq(0).And(ndvi.gt(0.55)).And(ndmi.gt(0.15)), 6)
     # 4 Agricultura — dossel vigoroso com ALTA clorofila (NDRE) → distingue de pasto
     c = c.where(c.eq(0).And(ndvi.gt(0.40)).And(ndre.gt(0.28)), 4)
@@ -203,7 +207,7 @@ def _vis_for(layer: str) -> Dict[str, Any]:
     if layer == "nbr":
         return {"bands": ["NBR"], "min": -0.3, "max": 0.8, "palette": PALETTE_BURN}
     if layer == "classificacao":
-        return {"bands": ["class"], "min": 1, "max": 9, "palette": CLASS_PALETTE}
+        return {"bands": ["class"], "min": 1, "max": len(CLASSES), "palette": CLASS_PALETTE}
     raise ValueError(f"Camada desconhecida: {layer}")
 
 

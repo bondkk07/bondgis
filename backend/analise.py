@@ -26,12 +26,12 @@ from config import get_settings
 from sentinel import (CLASSES, add_indices, build_collection, classify,
                       composite, geometry_from_geojson, latest_date)
 
-# Agrupamentos das 9 classes Sentinel (sentinel.CLASSES)
-SENT_VEG = [6, 7]                  # Vegetação Secundária + Floresta
-SENT_ANTROPICO = [3, 4, 5, 9]      # Solo, Agricultura, Pastagem, Infraestrutura
+# Agrupamentos das 7 classes Sentinel (sentinel.CLASSES) — revisão 2
+SENT_VEG = [6]                     # Vegetação Nativa (floresta + veg. secundária)
+SENT_ANTROPICO = [3, 4, 5, 7]      # Solo, Agricultura, Pastagem, Infraestrutura
 SENT_USO_PRODUTIVO = [4, 5]        # Agricultura + Pastagem
 SENT_AGUA_UMIDA = [1, 2]
-SENT_DEGRADACAO = [3, 8]           # Solo exposto + Queimada
+SENT_DEGRADACAO = [3]              # Solo exposto
 
 TIPOS_VALIDOS = ["completa", "auditoria", "conformidade", "vegetacao"]
 
@@ -217,13 +217,18 @@ def _mod_cruzamentos_score(ctx):
         div_img = div_img.where(div_img.eq(0).And(divergencia), check_id)
 
     # C1 — Uso produtivo × Área Consolidada
+    # Revisão 2 (orientador): a área avaliada é sempre o uso produtivo observado
+    # no imóvel. Quando o imóvel NÃO declara área consolidada, não há polígono
+    # conforme (_dentro devolve máscara zero), logo todo o uso produtivo fica
+    # divergente (pct = 0) em vez de o cruzamento ser excluído — a ausência da
+    # camada é tratada como divergência, não como "não avaliável".
     add(1, ["Área Consolidada (CAR)"], ["Sentinel-2 (uso atual)"],
-        imovel if car["area_consolidada"] is not None else None,
-        sent_prod, _dentro(car["area_consolidada"]),
+        imovel, sent_prod, _dentro(car["area_consolidada"]),
         "Avalia se a área com uso produtivo observado (agricultura + pastagem, "
-        "Sentinel-2) está contida na Área Consolidada declarada no CAR. "
-        "Divergente = uso produtivo fora da área consolidada declarada — "
-        "indício a verificar.")
+        "Sentinel-2) está contida na Área Consolidada declarada no CAR. Quando "
+        "não há área consolidada declarada, todo o uso produtivo é considerado "
+        "divergente. Divergente = uso produtivo fora da área consolidada "
+        "declarada — indício a verificar.")
 
     # C2 — Reserva Legal × vegetação existente
     rl = car["reserva_legal"]

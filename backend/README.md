@@ -185,8 +185,8 @@ resultados, veja `optional_postgis.py` e `schema.sql` (instruções no topo do
 
 ## 8. Notas sobre a classificação
 
-A classificação em 9 classes (Água, Área Úmida, Solo Exposto, Agricultura,
-Pastagem, Vegetação Secundária, Floresta, Área Queimada, Infraestrutura) é
+A classificação em 7 classes (Água, Área Úmida, Solo Exposto, Agricultura,
+Pastagem, Vegetação Nativa, Infraestrutura) é
 **preliminar**, baseada em limiares de índices espectrais
 (`sentinel.py → classify`). Serve como diagnóstico rápido; para uso oficial,
 ajuste os limiares à sua região ou substitua por um classificador treinado
